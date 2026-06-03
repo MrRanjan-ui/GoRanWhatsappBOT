@@ -41,12 +41,41 @@ interface Session {
   collectedFields: Set<string>;
   /** Whether the lead has already been saved */
   leadSaved: boolean;
+  /** Per-JID processing lock to prevent duplicate responses from race conditions */
+  processing: boolean;
+  /** Stashed booking time from user message (when they provide time + booking request in one message) */
+  pendingBookingTime?: string;
 }
 
 const sessions: { [jid: string]: Session } = {};
 
 // The fields we want to collect during qualification
 const REQUIRED_FIELDS = ['bizType', 'challenge', 'process', 'teamSize', 'email'] as const;
+
+// ──────────────────────────────────────────────────
+// Utility: extract email from raw text via regex
+// ──────────────────────────────────────────────────
+function extractEmailFromText(text: string): string | null {
+  const emailRegex = /[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}/;
+  const match = text.match(emailRegex);
+  return match ? match[0] : null;
+}
+
+// ──────────────────────────────────────────────────
+// Utility: strip any [TRIGGER_BOOKING] tokens from text
+// ──────────────────────────────────────────────────
+function stripTriggerTokens(text: string): string {
+  return text.replace(/\[TRIGGER_BOOKING\]/g, '').trim();
+}
+
+// ──────────────────────────────────────────────────
+// Utility: check if text contains booking intent keywords
+// ──────────────────────────────────────────────────
+function hasBookingIntent(text: string): boolean {
+  const lower = text.toLowerCase();
+  const keywords = ['book', 'schedule', 'meeting', 'appointment', 'call', 'slot'];
+  return keywords.some(kw => lower.includes(kw));
+}
 
 /**
  * Build a dynamic system instruction that tells Gemini what info
@@ -91,13 +120,14 @@ GUIDELINES:
 }
 
 ### BOOKING TRIGGER
-If the user explicitly asks to book a call, schedule a meeting, or start a project, reply with EXACTLY: [TRIGGER_BOOKING]
-Do not output the booking link yourself.
+If the user explicitly asks to book a call, schedule a meeting, or start a project, reply with EXACTLY and ONLY: [TRIGGER_BOOKING]
+Do NOT add any other text before or after [TRIGGER_BOOKING]. Just the token alone.
 
 ### FORMAT
 - Keep messages concise and punchy for WhatsApp (not too long).
 - Use *bold* for emphasis. Use bullet points when helpful.
-- Be warm, professional, and consultative.`;
+- Be warm, professional, and consultative.
+- Send only ONE response per turn. Never send multiple messages.`;
 }
 
 /**
@@ -121,7 +151,6 @@ export async function handleIncomingMessage(sock: WASocket, remoteJid: string, s
   // Reset command
   if (lowerText === 'menu' || lowerText === 'exit' || lowerText === 'reset' || lowerText === 'home') {
     delete sessions[remoteJid];
-    // Fall through to create a new session below
   }
 
   // Initialize session if needed
@@ -136,25 +165,45 @@ export async function handleIncomingMessage(sock: WASocket, remoteJid: string, s
         timestamp: new Date().toISOString()
       },
       collectedFields: new Set(),
-      leadSaved: false
+      leadSaved: false,
+      processing: false
     };
   }
 
   const session = sessions[remoteJid];
 
-  // Refresh the 15-minute inactivity timer
-  refreshSessionTimeout(sock, remoteJid);
+  // ── Per-JID lock: prevent processing overlapping messages simultaneously ──
+  if (session.processing) {
+    console.log(`[LOCK] Skipping overlapping message for ${remoteJid} — already processing.`);
+    return;
+  }
+  session.processing = true;
 
-  // Handle based on phase
-  switch (session.phase) {
-    case 'qualifying':
-    case 'chatting':
-      await handleAIConversation(sock, remoteJid, session, text, isNewSession);
-      break;
+  try {
+    // ── Pre-processing: extract email from raw text immediately ──
+    const emailInMessage = extractEmailFromText(text);
+    if (emailInMessage && !session.collectedFields.has('email')) {
+      session.leadData.email = emailInMessage;
+      session.collectedFields.add('email');
+      console.log(`[FAST-EXTRACT] Email captured from message: ${emailInMessage}`);
+    }
 
-    case 'booking':
-      await handleBookingResponse(sock, remoteJid, session, text);
-      break;
+    // Refresh the 15-minute inactivity timer
+    refreshSessionTimeout(sock, remoteJid);
+
+    // Handle based on phase
+    switch (session.phase) {
+      case 'qualifying':
+      case 'chatting':
+        await handleAIConversation(sock, remoteJid, session, text, isNewSession);
+        break;
+
+      case 'booking':
+        await handleBookingResponse(sock, remoteJid, session, text);
+        break;
+    }
+  } finally {
+    session.processing = false;
   }
 }
 
@@ -167,7 +216,7 @@ async function handleAIConversation(sock: WASocket, remoteJid: string, session: 
   // Build the appropriate system prompt
   const systemPrompt = session.phase === 'qualifying'
     ? buildQualificationSystemPrompt(session.collectedFields)
-    : config.systemInstruction + '\n\nYou are in open chat mode. The user has already been qualified. Be helpful, answer any questions about GoRan AI, and if they want to book a call, reply with exactly: [TRIGGER_BOOKING]';
+    : config.systemInstruction + '\n\nYou are in open chat mode. The user has already been qualified. Be helpful, answer any questions about GoRan AI, and if they want to book a call, reply with exactly and only: [TRIGGER_BOOKING]';
 
   // For the very first message, prepend a greeting context
   const effectiveUserText = isFirstMessage
@@ -177,19 +226,35 @@ async function handleAIConversation(sock: WASocket, remoteJid: string, session: 
   // Get AI response
   const aiResponse = await askGemini(effectiveUserText, session.history, systemPrompt);
 
-  // Check for booking trigger
+  // ── Check for booking trigger BEFORE sending anything ──
   if (aiResponse.includes('[TRIGGER_BOOKING]')) {
-    console.log(`[BOOKING-TRIGGER] User requested booking during ${session.phase} phase.`);
+    console.log(`[BOOKING-TRIGGER] Detected in AI response during ${session.phase} phase.`);
+    
+    // Save user message to history (but NOT the trigger response)
+    session.history.push({ role: 'user', parts: [{ text: userText }] });
+
+    // If user's message also contains time info, stash it for the booking flow
+    if (hasBookingIntent(userText) || /\d/.test(userText)) {
+      session.pendingBookingTime = userText;
+    }
+
     await initiateBookingFlow(sock, remoteJid, session);
+    return;
+  }
+
+  // ── Safety: strip any leaked trigger tokens before sending ──
+  const cleanResponse = stripTriggerTokens(aiResponse);
+  if (!cleanResponse) {
+    console.log(`[SAFETY] AI response was empty after stripping trigger tokens. Skipping send.`);
     return;
   }
 
   // Save to conversation history
   session.history.push({ role: 'user', parts: [{ text: userText }] });
-  session.history.push({ role: 'model', parts: [{ text: aiResponse }] });
+  session.history.push({ role: 'model', parts: [{ text: cleanResponse }] });
 
   // Send the AI response
-  await sock.sendMessage(remoteJid, { text: aiResponse });
+  await sock.sendMessage(remoteJid, { text: cleanResponse });
 
   // Background: extract any new qualification data from conversation
   if (session.phase === 'qualifying') {
@@ -286,10 +351,19 @@ async function handleBookingResponse(sock: WASocket, remoteJid: string, session:
       session.history,
       config.systemInstruction
     );
+    const cleanSkip = stripTriggerTokens(skipResponse);
     session.history.push({ role: 'user', parts: [{ text: userText }] });
-    session.history.push({ role: 'model', parts: [{ text: skipResponse }] });
-    await sock.sendMessage(remoteJid, { text: skipResponse });
+    session.history.push({ role: 'model', parts: [{ text: cleanSkip }] });
+    await sock.sendMessage(remoteJid, { text: cleanSkip });
     return;
+  }
+
+  // Extract email from this message if present
+  const emailInMessage = extractEmailFromText(userText);
+  if (emailInMessage && !session.leadData.email) {
+    session.leadData.email = emailInMessage;
+    session.collectedFields.add('email');
+    console.log(`[BOOKING-EMAIL] Email captured: ${emailInMessage}`);
   }
 
   // Try to parse the meeting time
@@ -298,10 +372,12 @@ async function handleBookingResponse(sock: WASocket, remoteJid: string, session:
 
   if (parsedTime && parsedTime.start && parsedTime.end) {
     try {
-      console.log(`[MEETING-SCHEDULER] Creating event for ${session.leadData.phone} at ${parsedTime.start}`);
+      console.log(`[MEETING-SCHEDULER] Creating event for ${session.leadData.phone} at ${parsedTime.start} -> ${parsedTime.end}`);
+      console.log(`[MEETING-SCHEDULER] Attendee email: ${session.leadData.email}`);
+
       const eventLink = await createCalendarEvent({
         summary: `GoRan AI Strategy Call: ${session.leadData.bizType || 'Prospect'} & Ashish Ranjan`,
-        description: `Automated scoping session for GoRan AI.\n\nLead Details:\n- Industry/Biz: ${session.leadData.bizType}\n- Challenge: ${session.leadData.challenge}\n- Current Process: ${session.leadData.process}\n- Team Size: ${session.leadData.teamSize}\n- Phone: +${session.leadData.phone}\n- Email: ${session.leadData.email}\n- Questions: ${session.leadData.questionsAsked.join(', ') || 'None'}`,
+        description: `Automated scoping session for GoRan AI.\n\nLead Details:\n- Industry/Biz: ${session.leadData.bizType || 'TBD'}\n- Challenge: ${session.leadData.challenge || 'TBD'}\n- Current Process: ${session.leadData.process || 'TBD'}\n- Team Size: ${session.leadData.teamSize || 'TBD'}\n- Phone: +${session.leadData.phone}\n- Email: ${session.leadData.email || 'TBD'}`,
         startIso: parsedTime.start,
         endIso: parsedTime.end,
         attendeeEmail: session.leadData.email || ''
@@ -310,70 +386,72 @@ async function handleBookingResponse(sock: WASocket, remoteJid: string, session:
       session.leadData.meetingTime = parsedTime.readable;
       session.leadData.meetingLink = eventLink || undefined;
 
-      const confirmResponse = await askGemini(
-        `The meeting has been successfully booked for ${parsedTime.readable} (IST). A Google Calendar invitation has been sent to ${session.leadData.email}. ${eventLink ? `Meeting link: ${eventLink}` : ''}. Confirm this enthusiastically to the user and invite them to continue chatting about anything else.`,
-        session.history,
-        config.systemInstruction
-      );
+      const confirmMsg = `📅 *Meeting Confirmed!*\n\nYour strategy call has been scheduled for *${parsedTime.readable}* (IST).\n${session.leadData.email ? `A Google Calendar invitation has been sent to *${session.leadData.email}*.` : ''}\n${eventLink ? `\n🔗 Event Link: ${eventLink}` : ''}\n\nIs there anything else I can help you with?`;
 
       session.history.push({ role: 'user', parts: [{ text: userText }] });
-      session.history.push({ role: 'model', parts: [{ text: confirmResponse }] });
-      await sock.sendMessage(remoteJid, { text: confirmResponse });
+      session.history.push({ role: 'model', parts: [{ text: confirmMsg }] });
+      await sock.sendMessage(remoteJid, { text: confirmMsg });
       session.phase = 'chatting';
 
+      // Save lead if not already saved
+      if (!session.leadSaved) {
+        await processAndSaveCompletedLead(sock, remoteJid, session);
+      }
     } catch (err: any) {
       console.error('[MEETING-SCHEDULER] Google Calendar event creation failed:', err.message || err);
-      const errorResponse = await askGemini(
-        "There was a technical error connecting to Google Calendar. Apologize to the user, let them know the team will follow up via email with a scheduling link, and invite them to keep chatting.",
-        session.history,
-        config.systemInstruction
-      );
+      const errorMsg = `⚠️ I had trouble creating the Google Calendar event, but I've noted your preference for *${parsedTime.readable}* (IST). Our team will send you a calendar invitation via email shortly.\n\nIs there anything else I can help you with?`;
       session.history.push({ role: 'user', parts: [{ text: userText }] });
-      session.history.push({ role: 'model', parts: [{ text: errorResponse }] });
-      await sock.sendMessage(remoteJid, { text: errorResponse });
+      session.history.push({ role: 'model', parts: [{ text: errorMsg }] });
+      await sock.sendMessage(remoteJid, { text: errorMsg });
       session.phase = 'chatting';
     }
   } else {
-    // Couldn't parse — ask again via AI
-    const retryResponse = await askGemini(
-      `The user tried to provide a meeting time but I couldn't parse "${userText}". Ask them politely to try a clearer format like "Tomorrow at 3 PM" or "June 10 at 11 AM". Also mention they can type "skip" to defer.`,
-      session.history,
-      config.systemInstruction
-    );
+    // Couldn't parse — ask again with a clear message
+    const retryMsg = `I couldn't quite parse that date and time. Could you try a clearer format?\n\nExamples:\n• *June 11 at 3 PM*\n• *Tomorrow at 11 AM*\n• *Friday at 2:30 PM*\n\nOr type *skip* to schedule later.`;
     session.history.push({ role: 'user', parts: [{ text: userText }] });
-    session.history.push({ role: 'model', parts: [{ text: retryResponse }] });
-    await sock.sendMessage(remoteJid, { text: retryResponse });
+    session.history.push({ role: 'model', parts: [{ text: retryMsg }] });
+    await sock.sendMessage(remoteJid, { text: retryMsg });
   }
 }
 
 /**
- * Triggers the booking flow by asking for preferred date/time
+ * Triggers the booking flow — handles the case where user already provided time + email in one message
  */
 async function initiateBookingFlow(sock: WASocket, remoteJid: string, session: Session) {
   session.phase = 'booking';
 
-  // If we don't have email yet, ask for it first via AI
-  if (!session.leadData.email) {
-    const emailAsk = await askGemini(
-      "The user wants to book a call but we don't have their email yet. Ask for their email address naturally — explain we need it to send the calendar invitation and a summary of the opportunities discussed. Then ask for their preferred date and time.",
-      session.history,
-      config.systemInstruction
-    );
-    // Temporarily go back to qualifying to collect email first, then re-trigger
-    session.phase = 'qualifying';
-    session.history.push({ role: 'model', parts: [{ text: emailAsk }] });
-    await sock.sendMessage(remoteJid, { text: emailAsk });
+  // If we already have email AND a pending booking time (user gave both in one message), fast-track!
+  if (session.leadData.email && session.pendingBookingTime) {
+    const pendingTime = session.pendingBookingTime;
+    session.pendingBookingTime = undefined;
+    console.log(`[FAST-TRACK-BOOKING] Email: ${session.leadData.email}, Time text: "${pendingTime}"`);
+    await handleBookingResponse(sock, remoteJid, session, pendingTime);
     return;
   }
 
+  // If we don't have email yet, ask for it
+  if (!session.leadData.email) {
+    const emailMsg = `To send you the calendar invitation and a summary, I'll need your email address. What's the best email to reach you at?`;
+    session.history.push({ role: 'model', parts: [{ text: emailMsg }] });
+    await sock.sendMessage(remoteJid, { text: emailMsg });
+    // Stay in 'booking' phase — next message will be processed as booking response where we extract email + time
+    return;
+  }
+
+  // We have email but need a time
   await sock.sendPresenceUpdate('composing', remoteJid);
-  const bookingPrompt = await askGemini(
-    "The user wants to book a strategy call. Ask them enthusiastically for their preferred date and time (e.g., 'Tomorrow at 3 PM' or 'Friday at 11 AM'). Mention they can also type 'skip' to schedule later. Keep it brief and WhatsApp-friendly.",
-    session.history,
-    config.systemInstruction
-  );
-  session.history.push({ role: 'model', parts: [{ text: bookingPrompt }] });
-  await sock.sendMessage(remoteJid, { text: bookingPrompt });
+
+  // If there's a pending time from the trigger message, use it
+  if (session.pendingBookingTime) {
+    const pendingTime = session.pendingBookingTime;
+    session.pendingBookingTime = undefined;
+    await handleBookingResponse(sock, remoteJid, session, pendingTime);
+    return;
+  }
+
+  const bookingMsg = `📅 *Let's book your strategy call!*\n\nPlease reply with your preferred date and time.\n\nExamples:\n• *June 11 at 3 PM*\n• *Tomorrow at 11 AM*\n• *Friday at 2:30 PM*\n\nOr type *skip* to schedule later.`;
+  session.history.push({ role: 'model', parts: [{ text: bookingMsg }] });
+  await sock.sendMessage(remoteJid, { text: bookingMsg });
 }
 
 /**
@@ -413,27 +491,42 @@ async function processAndSaveCompletedLead(sock: WASocket, remoteJid: string, se
 }
 
 /**
- * Parses user preferred meeting time using Gemini API
+ * Parses user preferred meeting time using Gemini API — IMPROVED with explicit date handling
  */
 async function parseMeetingTimeWithGemini(userText: string): Promise<{ start: string, end: string, readable: string } | null> {
-  const currentLocalTime = new Date().toString();
-  const prompt = `You are a scheduling parser. Today is: ${currentLocalTime} (India, IST).
-The user wants a 15-minute slot: "${userText}".
+  const now = new Date();
+  const istOffset = '+05:30';
+  // Create a readable current time in IST
+  const currentIST = new Date(now.getTime() + (5.5 * 60 * 60 * 1000 - now.getTimezoneOffset() * 60 * 1000));
+  const currentDateStr = now.toISOString();
 
-Parse this relative to current time (assume year 2026) and output ONLY a JSON object:
+  const prompt = `You are a precise date/time parser. The current date and time is: ${currentDateStr} (UTC). The local timezone is IST (UTC+05:30).
+
+The user wants to book a 15-minute meeting slot. They said: "${userText}"
+
+CRITICAL RULES:
+1. Parse the EXACT date the user specified. If they say "11th June", use June 11. If they say "tomorrow", calculate from today's date.
+2. The year is 2026 unless specified otherwise.
+3. Generate ISO 8601 timestamps WITH the IST offset (+05:30).
+4. The end time is exactly 15 minutes after the start time.
+5. DO NOT use today's date unless the user explicitly says "today".
+
+Output ONLY a JSON object (no markdown, no explanation):
 {
-  "start": "ISO 8601 with +05:30 offset",
-  "end": "ISO 8601 15 min after start",
-  "readable": "e.g. Thursday, June 4 at 3:00 PM"
+  "start": "2026-06-11T15:00:00+05:30",
+  "end": "2026-06-11T15:15:00+05:30",
+  "readable": "Wednesday, June 11 at 3:00 PM IST"
 }
 
-If unparseable, output: {}`;
+If the text cannot be parsed as a valid date and time, output exactly: {}`;
 
   try {
     const rawReply = await askGeminiRaw(prompt);
+    console.log(`[DATE-PARSER] Raw Gemini response: ${rawReply}`);
     const result = parseGeminiJson(rawReply);
     if (!result || Object.keys(result).length === 0) return null;
     if (!result.start || !result.end) return null;
+    console.log(`[DATE-PARSER] Parsed: start=${result.start}, end=${result.end}, readable=${result.readable}`);
     return result;
   } catch (error) {
     console.error('[MEETING-PARSER] Error parsing date with Gemini:', error);
@@ -547,7 +640,6 @@ async function handleSessionTimeout(sock: WASocket, remoteJid: string) {
     console.log(`[TIMEOUT-LEAD] Compiling partial lead for: ${session.leadData.phone}`);
 
     try {
-      // Extract any remaining data from conversation
       await extractQualificationData(session);
 
       const result = await scoreTimeoutLead(session.leadData);
@@ -571,11 +663,7 @@ async function handleSessionTimeout(sock: WASocket, remoteJid: string) {
         meetingLink: session.leadData.meetingLink
       });
 
-      const timeoutMsg = await askGemini(
-        "The user has been inactive for 15 minutes. Send them a brief, warm message saying you've saved their details and they can come back anytime to resume the conversation or book a call.",
-        session.history,
-        config.systemInstruction
-      );
+      const timeoutMsg = "It's been a while, so I've saved the details you shared. Feel free to come back anytime to resume our conversation or book a call! 👋";
       await sock.sendMessage(remoteJid, { text: timeoutMsg });
     } catch (err) {
       console.error('Error compiling timeout lead:', err);
