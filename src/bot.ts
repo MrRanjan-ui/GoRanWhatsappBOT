@@ -2,7 +2,7 @@ import { WASocket } from '@whiskeysockets/baileys';
 import * as fs from 'fs';
 import * as path from 'path';
 import * as dotenv from 'dotenv';
-import { askGemini, GeminiMessage } from './gemini';
+import { askGemini, askGeminiRaw, GeminiMessage } from './gemini';
 import { createCalendarEvent } from './services/calendar';
 import { sendLeadEmails } from './services/mailer';
 import { saveLead } from './services/db';
@@ -15,31 +15,93 @@ const configPath = path.join(__dirname, '../config.json');
 const config = JSON.parse(fs.readFileSync(configPath, 'utf8'));
 
 // Sessions state storage (In-memory)
+interface LeadData {
+  phone: string;
+  bizType?: string;
+  challenge?: string;
+  process?: string;
+  teamSize?: string;
+  email?: string;
+  meetingTime?: string;
+  meetingLink?: string;
+  score?: string;
+  scoreReason?: string;
+  summaryBlock?: string;
+  questionsAsked: string[];
+  timestamp: string;
+}
+
 interface Session {
-  state: 'QUAL_BIZ_TYPE' | 'QUAL_CHALLENGE' | 'QUAL_PROCESS' | 'QUAL_TEAM_SIZE' | 'QUAL_EMAIL' | 'QUAL_MEETING' | 'AI_CHAT';
+  /** 'qualifying' = AI is naturally collecting lead info; 'booking' = waiting for date/time; 'chatting' = post-qualification free chat */
+  phase: 'qualifying' | 'booking' | 'chatting';
   history: GeminiMessage[];
   timeoutTimer?: NodeJS.Timeout;
-  leadData: {
-    phone: string;
-    bizType?: string;
-    challenge?: string;
-    process?: string;
-    teamSize?: string;
-    email?: string;
-    meetingTime?: string;
-    meetingLink?: string;
-    score?: string;
-    scoreReason?: string;
-    summaryBlock?: string;
-    questionsAsked: string[];
-    timestamp: string;
-  };
+  leadData: LeadData;
+  /** Tracks which qualification fields have been extracted so far */
+  collectedFields: Set<string>;
+  /** Whether the lead has already been saved */
+  leadSaved: boolean;
 }
 
 const sessions: { [jid: string]: Session } = {};
 
+// The fields we want to collect during qualification
+const REQUIRED_FIELDS = ['bizType', 'challenge', 'process', 'teamSize', 'email'] as const;
+
 /**
- * Main message handler mapping states and actions
+ * Build a dynamic system instruction that tells Gemini what info
+ * is still missing so it can naturally work those questions into conversation.
+ */
+function buildQualificationSystemPrompt(collected: Set<string>): string {
+  const missing: string[] = [];
+  if (!collected.has('bizType'))   missing.push('What type of business they run');
+  if (!collected.has('challenge')) missing.push('Their biggest challenge (e.g. lead gen, operations, support, recruitment, follow-ups)');
+  if (!collected.has('process'))   missing.push('How they currently handle that process');
+  if (!collected.has('teamSize'))  missing.push('Roughly how many employees they have');
+  if (!collected.has('email'))     missing.push('Their email address (for sending a summary and calendar invite)');
+
+  const collectedList = Array.from(collected);
+  const collectedInfo = collectedList.length > 0
+    ? `\nYou have already collected: ${collectedList.join(', ')}. Do NOT re-ask for these.`
+    : '';
+
+  const allCollected = missing.length === 0;
+
+  return `${config.systemInstruction}
+
+### YOUR CURRENT ROLE — AI Sales Consultant & Lead Qualifier
+You are having a REAL, natural conversation on WhatsApp. You are NOT a form or a quiz.
+${collectedInfo}
+
+${allCollected
+  ? `ALL qualification data has been collected! 🎉
+Now do one of these:
+- Provide a short, personalized value insight based on their business details.
+- Naturally suggest booking a 15-minute strategy call. Ask for their preferred date/time.
+- If they already gave a preferred time, output exactly: [TRIGGER_BOOKING]
+- Otherwise, continue chatting helpfully about their business.`
+  : `You still need to learn the following (weave them into conversation NATURALLY — do NOT ask all at once, do NOT list them as a numbered form):
+${missing.map((m, i) => `${i + 1}. ${m}`).join('\n')}
+
+GUIDELINES:
+- Ask ONE missing piece of info at a time, max two if they're closely related.
+- React to what the user says — acknowledge their answers, show empathy, give a brief insight, THEN ask the next question.
+- If the user asks YOU a question mid-flow, answer it helpfully and then smoothly continue gathering info.
+- Sound like a smart AI consultant, NOT a script reader.`
+}
+
+### BOOKING TRIGGER
+If the user explicitly asks to book a call, schedule a meeting, or start a project, reply with EXACTLY: [TRIGGER_BOOKING]
+Do not output the booking link yourself.
+
+### FORMAT
+- Keep messages concise and punchy for WhatsApp (not too long).
+- Use *bold* for emphasis. Use bullet points when helpful.
+- Be warm, professional, and consultative.`;
+}
+
+/**
+ * Main message handler — fully AI-driven
  */
 export async function handleIncomingMessage(sock: WASocket, remoteJid: string, senderNumber: string, messageText: string) {
   // 1. Strict Whitelist Filter
@@ -56,17 +118,25 @@ export async function handleIncomingMessage(sock: WASocket, remoteJid: string, s
   const text = messageText.trim();
   const lowerText = text.toLowerCase();
 
-  // Reset/Initialize Session
+  // Reset command
+  if (lowerText === 'menu' || lowerText === 'exit' || lowerText === 'reset' || lowerText === 'home') {
+    delete sessions[remoteJid];
+    // Fall through to create a new session below
+  }
+
+  // Initialize session if needed
   const isNewSession = !sessions[remoteJid];
   if (isNewSession) {
     sessions[remoteJid] = {
-      state: 'QUAL_BIZ_TYPE',
+      phase: 'qualifying',
       history: [],
       leadData: {
         phone: senderNumber,
         questionsAsked: [],
         timestamp: new Date().toISOString()
-      }
+      },
+      collectedFields: new Set(),
+      leadSaved: false
     };
   }
 
@@ -75,238 +145,256 @@ export async function handleIncomingMessage(sock: WASocket, remoteJid: string, s
   // Refresh the 15-minute inactivity timer
   refreshSessionTimeout(sock, remoteJid);
 
-  // Global command to reset conversation
-  if (lowerText === 'menu' || lowerText === 'exit' || lowerText === 'reset' || lowerText === 'home') {
-    session.state = 'QUAL_BIZ_TYPE';
-    session.history = [];
-    session.leadData = {
-      phone: senderNumber,
-      questionsAsked: [],
-      timestamp: new Date().toISOString()
-    };
-    refreshSessionTimeout(sock, remoteJid);
-    const welcome = "Hi, thanks for reaching out to GoRan AI.\n\nBefore we talk, I'd love to understand your business.\n\n*Question 1*: What type of business do you run?";
-    await sock.sendMessage(remoteJid, { text: welcome });
-    return;
-  }
-
-  // If new session, send greeting and Pattern Interrupt immediately
-  if (isNewSession) {
-    const welcome = "Hi, thanks for reaching out to GoRan AI.\n\nBefore we talk, I'd love to understand your business.\n\n*Question 1*: What type of business do you run?";
-    await sock.sendMessage(remoteJid, { text: welcome });
-    return;
-  }
-
-  // Heuristic side-question handler during qualification
-  if (session.state !== 'AI_CHAT' && isAskingQuestion(text)) {
-    console.log(`[QUAL-QUESTION-INTERRUPT] User asked a question: "${text}" at state: ${session.state}`);
-    session.leadData.questionsAsked.push(text);
-    
-    await sock.sendPresenceUpdate('composing', remoteJid);
-
-    const questionContext = `The user is in the middle of a qualification flow and was asked: "${getCurrentQuestionText(session.state)}". Instead of answering, they asked: "${text}".
-    
-    Please answer their question briefly and professionally based on GoRan AI context. 
-    At the very end of your response, politely guide the conversation back to the active discovery step by asking the exact question: "${getCurrentQuestionText(session.state)}"`;
-
-    const aiResponse = await askGemini(questionContext, session.history);
-    
-    if (aiResponse.includes('[TRIGGER_BOOKING]')) {
-      console.log(`[QUAL-BOOKING-TRIGGER] User requested direct booking during qualification.`);
-      await initiateBookingFlow(sock, remoteJid, session);
-      return;
-    }
-
-    // Save to message history
-    session.history.push({ role: 'user', parts: [{ text: text }] });
-    session.history.push({ role: 'model', parts: [{ text: aiResponse }] });
-
-    await sock.sendMessage(remoteJid, { text: aiResponse });
-    return;
-  }
-
-  // State Machine Flow
-  switch (session.state) {
-    case 'QUAL_BIZ_TYPE':
-      session.leadData.bizType = text;
-      session.state = 'QUAL_CHALLENGE';
-      const q2 = "What's the biggest challenge you're facing right now?\n\n• Lead Generation\n• Operations\n• Customer Support\n• Recruitment\n• Follow-Ups\n• Something Else";
-      await sock.sendMessage(remoteJid, { text: q2 });
+  // Handle based on phase
+  switch (session.phase) {
+    case 'qualifying':
+    case 'chatting':
+      await handleAIConversation(sock, remoteJid, session, text, isNewSession);
       break;
 
-    case 'QUAL_CHALLENGE':
-      session.leadData.challenge = text;
-      session.state = 'QUAL_PROCESS';
-      await sock.sendMessage(remoteJid, { text: "How are you currently handling this process?" });
-      break;
-
-    case 'QUAL_PROCESS':
-      session.leadData.process = text;
-      session.state = 'QUAL_TEAM_SIZE';
-      await sock.sendMessage(remoteJid, { text: "Roughly how many employees are on your team?" });
-      break;
-
-    case 'QUAL_TEAM_SIZE':
-      session.leadData.teamSize = text;
-      session.state = 'QUAL_EMAIL';
-      
-      // Stage 3: Give Value dynamically using Gemini
-      await sock.sendPresenceUpdate('composing', remoteJid);
-      
-      const valResponse = await generateValueProposition(
-        session.leadData.bizType || '',
-        session.leadData.challenge || '',
-        session.leadData.process || '',
-        session.leadData.teamSize || ''
-      );
-
-      const valuePitch = `Based on what you've shared, I can already identify a few areas where AI automation may help:\n\n${valResponse}`;
-      await sock.sendMessage(remoteJid, { text: valuePitch });
-
-      // Stage 4: Soft Transition
-      const softTransition = "Every business is different, so I'd need to understand your workflow in a little more detail before recommending an implementation plan.\n\nA short 15-minute strategy call is usually the fastest way to do that.";
-      await sock.sendMessage(remoteJid, { text: softTransition });
-
-      // Ask for Email (Soft Pitch)
-      const emailPitch = "If you'd like, I can also send a summary of the opportunities we discussed.\n\nWhat's the best email address for that?";
-      await sock.sendMessage(remoteJid, { text: emailPitch });
-      break;
-
-    case 'QUAL_EMAIL':
-      session.leadData.email = text;
-      session.state = 'QUAL_MEETING';
-
-      const meetingPitch = "📅 *Would you like to schedule your 15-minute scoping call directly now?*\n\nIf yes, please reply with your preferred date and time (e.g. *Tomorrow at 3 PM*, or *Friday at 11 AM*).\n\nIf you prefer to book it later, reply with *skip*.";
-      await sock.sendMessage(remoteJid, { text: meetingPitch });
-      break;
-
-    case 'QUAL_MEETING':
-      if (lowerText === 'skip') {
-        console.log(`[MEETING-SCHEDULER] User skipped calendar booking.`);
-        await processAndSaveCompletedLead(sock, remoteJid, senderNumber, session);
-      } else {
-        await sock.sendPresenceUpdate('composing', remoteJid);
-        const parsedTime = await parseMeetingTimeWithGemini(text);
-
-        if (parsedTime && parsedTime.start && parsedTime.end) {
-          try {
-            console.log(`[MEETING-SCHEDULER] Creating event for ${senderNumber} at ${parsedTime.start}`);
-            const eventLink = await createCalendarEvent({
-              summary: `GoRan AI Strategy Call: ${session.leadData.bizType} & Ashish Ranjan`,
-              description: `Automated scoping session for GoRan AI.\n\nLead Details:\n- Industry/Biz: ${session.leadData.bizType}\n- Challenge: ${session.leadData.challenge}\n- Current Process: ${session.leadData.process}\n- Team Size: ${session.leadData.teamSize}\n- Phone: +${senderNumber}\n- Email: ${session.leadData.email}\n- Questions: ${session.leadData.questionsAsked.join(', ') || 'None'}`,
-              startIso: parsedTime.start,
-              endIso: parsedTime.end,
-              attendeeEmail: session.leadData.email || ''
-            });
-
-            // Save meeting details
-            session.leadData.meetingTime = parsedTime.readable;
-            session.leadData.meetingLink = eventLink || undefined;
-
-            const confirmMsg = `📅 *Meeting Confirmed!*\nI've scheduled your strategy call for *${parsedTime.readable}* (IST) and sent a Google Calendar invitation to *${session.leadData.email}*.`;
-            await sock.sendMessage(remoteJid, { text: confirmMsg });
-
-            await processAndSaveCompletedLead(sock, remoteJid, senderNumber, session);
-          } catch (err: any) {
-            console.error('[MEETING-SCHEDULER] Google Calendar event creation failed:', err.message || err);
-            await sock.sendMessage(remoteJid, { 
-              text: "⚠️ I encountered an error while trying to connect to Google Calendar. Let's skip booking for now; our team will follow up via email with a scheduling link." 
-            });
-            await processAndSaveCompletedLead(sock, remoteJid, senderNumber, session);
-          }
-        } else {
-          await sock.sendMessage(remoteJid, { 
-            text: "⚠️ I couldn't quite resolve that date and time format. Could you try specifying it more clearly? (e.g. *June 5 at 3 PM* or *tomorrow at 11 AM*), or reply with *skip* to defer." 
-          });
-        }
-      }
-      break;
-
-    case 'AI_CHAT':
-      await sock.sendPresenceUpdate('composing', remoteJid);
-      const aiReply = await askGemini(text, session.history);
-      
-      if (aiReply.includes('[TRIGGER_BOOKING]')) {
-        console.log(`[AI-CHAT-BOOKING-TRIGGER] User requested booking in AI_CHAT.`);
-        await initiateBookingFlow(sock, remoteJid, session);
-        return;
-      }
-      
-      session.history.push({ role: 'user', parts: [{ text: text }] });
-      session.history.push({ role: 'model', parts: [{ text: aiReply }] });
-
-      await sock.sendMessage(remoteJid, { text: aiReply });
+    case 'booking':
+      await handleBookingResponse(sock, remoteJid, session, text);
       break;
   }
 }
 
 /**
- * Parses user preferred meeting time using Gemini API relative to current local time
+ * Core AI conversation handler — used for both qualification and free chat
  */
-async function parseMeetingTimeWithGemini(userText: string): Promise<{ start: string, end: string, readable: string } | null> {
-  const currentLocalTime = new Date().toString();
-  const prompt = `You are a scheduling parser assistant. Today's date and time is: ${currentLocalTime} (local time in India, IST).
-The user wants to book a 15-minute slot. They specified the time: "${userText}".
+async function handleAIConversation(sock: WASocket, remoteJid: string, session: Session, userText: string, isFirstMessage: boolean) {
+  await sock.sendPresenceUpdate('composing', remoteJid);
 
-Perform these tasks:
-1. Parse the user's input relative to the current local time. Assume the year is 2026.
-2. Generate an ISO 8601 start timestamp (with timezone offset, e.g. +05:30) and an ISO 8601 end timestamp (exactly 15 minutes after start).
-3. Create a clean, human-readable date/time string representing the meeting time in Indian Standard Time (e.g. "Thursday, June 4 at 3:00 PM").
+  // Build the appropriate system prompt
+  const systemPrompt = session.phase === 'qualifying'
+    ? buildQualificationSystemPrompt(session.collectedFields)
+    : config.systemInstruction + '\n\nYou are in open chat mode. The user has already been qualified. Be helpful, answer any questions about GoRan AI, and if they want to book a call, reply with exactly: [TRIGGER_BOOKING]';
 
-Output your response strictly as a JSON string matching this structure:
-{
-  "start": "2026-06-04T15:00:00+05:30",
-  "end": "2026-06-04T15:15:00+05:30",
-  "readable": "Thursday, June 4 at 3:00 PM"
+  // For the very first message, prepend a greeting context
+  const effectiveUserText = isFirstMessage
+    ? `[The user just sent their first message to start a conversation. Greet them warmly and start qualifying naturally.]\n\nUser's message: "${userText}"`
+    : userText;
+
+  // Get AI response
+  const aiResponse = await askGemini(effectiveUserText, session.history, systemPrompt);
+
+  // Check for booking trigger
+  if (aiResponse.includes('[TRIGGER_BOOKING]')) {
+    console.log(`[BOOKING-TRIGGER] User requested booking during ${session.phase} phase.`);
+    await initiateBookingFlow(sock, remoteJid, session);
+    return;
+  }
+
+  // Save to conversation history
+  session.history.push({ role: 'user', parts: [{ text: userText }] });
+  session.history.push({ role: 'model', parts: [{ text: aiResponse }] });
+
+  // Send the AI response
+  await sock.sendMessage(remoteJid, { text: aiResponse });
+
+  // Background: extract any new qualification data from conversation
+  if (session.phase === 'qualifying') {
+    await extractQualificationData(session);
+
+    // Check if all fields are now collected
+    const allCollected = REQUIRED_FIELDS.every(f => session.collectedFields.has(f));
+    if (allCollected && !session.leadSaved) {
+      console.log(`[QUALIFICATION-COMPLETE] All fields collected for ${session.leadData.phone}`);
+      await processAndSaveCompletedLead(sock, remoteJid, session);
+    }
+  }
 }
 
-If the text cannot be resolved as a valid date and time, return an empty JSON: {}`;
+/**
+ * Extract structured qualification data from conversation history using Gemini
+ */
+async function extractQualificationData(session: Session) {
+  // Only extract if there's enough conversation (at least 2 exchanges)
+  if (session.history.length < 4) return;
+
+  const conversationText = session.history
+    .map(m => `${m.role === 'user' ? 'User' : 'Bot'}: ${m.parts[0].text}`)
+    .join('\n');
+
+  const extractionPrompt = `Analyze this WhatsApp conversation and extract any business qualification data the USER has shared.
+
+CONVERSATION:
+${conversationText}
+
+Extract ONLY information the USER explicitly stated. Output a JSON object with these fields (use null for anything not yet mentioned):
+{
+  "bizType": "type of business they run (string or null)",
+  "challenge": "their biggest challenge (string or null)",
+  "process": "how they currently handle it (string or null)",
+  "teamSize": "team/employee count (string or null)",
+  "email": "their email address (string or null)"
+}
+
+RULES:
+- Only extract data the USER actually provided. Do NOT infer or guess.
+- For email, only extract if it looks like a valid email address.
+- Return ONLY the JSON, no other text.`;
 
   try {
-    const rawReply = await askGemini(prompt, []);
-    const result = parseGeminiJson(rawReply);
-    if (!result || Object.keys(result).length === 0) return null;
-    if (!result.start || !result.end) return null;
-    return result;
-  } catch (error) {
-    console.error('[MEETING-PARSER] Error parsing date with Gemini:', error);
-    return null;
+    const rawReply = await askGeminiRaw(extractionPrompt);
+    const extracted = parseGeminiJson(rawReply);
+
+    if (extracted) {
+      if (extracted.bizType && !session.collectedFields.has('bizType')) {
+        session.leadData.bizType = extracted.bizType;
+        session.collectedFields.add('bizType');
+        console.log(`[DATA-EXTRACTED] bizType: ${extracted.bizType}`);
+      }
+      if (extracted.challenge && !session.collectedFields.has('challenge')) {
+        session.leadData.challenge = extracted.challenge;
+        session.collectedFields.add('challenge');
+        console.log(`[DATA-EXTRACTED] challenge: ${extracted.challenge}`);
+      }
+      if (extracted.process && !session.collectedFields.has('process')) {
+        session.leadData.process = extracted.process;
+        session.collectedFields.add('process');
+        console.log(`[DATA-EXTRACTED] process: ${extracted.process}`);
+      }
+      if (extracted.teamSize && !session.collectedFields.has('teamSize')) {
+        session.leadData.teamSize = extracted.teamSize;
+        session.collectedFields.add('teamSize');
+        console.log(`[DATA-EXTRACTED] teamSize: ${extracted.teamSize}`);
+      }
+      if (extracted.email && !session.collectedFields.has('email')) {
+        session.leadData.email = extracted.email;
+        session.collectedFields.add('email');
+        console.log(`[DATA-EXTRACTED] email: ${extracted.email}`);
+      }
+    }
+  } catch (err) {
+    console.error('[DATA-EXTRACTION] Error extracting qualification data:', err);
   }
 }
 
 /**
- * Triggers the booking flow directly by asking for email or meeting time
+ * Handle the booking date/time response
+ */
+async function handleBookingResponse(sock: WASocket, remoteJid: string, session: Session, userText: string) {
+  const lowerText = userText.toLowerCase();
+
+  if (lowerText === 'skip' || lowerText === 'later' || lowerText === 'no') {
+    console.log(`[BOOKING] User skipped calendar booking.`);
+    session.phase = 'chatting';
+    
+    await sock.sendPresenceUpdate('composing', remoteJid);
+    const skipResponse = await askGemini(
+      "The user decided to skip booking a call for now. Acknowledge this gracefully, let them know the team will follow up via email, and invite them to continue chatting or ask any questions.",
+      session.history,
+      config.systemInstruction
+    );
+    session.history.push({ role: 'user', parts: [{ text: userText }] });
+    session.history.push({ role: 'model', parts: [{ text: skipResponse }] });
+    await sock.sendMessage(remoteJid, { text: skipResponse });
+    return;
+  }
+
+  // Try to parse the meeting time
+  await sock.sendPresenceUpdate('composing', remoteJid);
+  const parsedTime = await parseMeetingTimeWithGemini(userText);
+
+  if (parsedTime && parsedTime.start && parsedTime.end) {
+    try {
+      console.log(`[MEETING-SCHEDULER] Creating event for ${session.leadData.phone} at ${parsedTime.start}`);
+      const eventLink = await createCalendarEvent({
+        summary: `GoRan AI Strategy Call: ${session.leadData.bizType || 'Prospect'} & Ashish Ranjan`,
+        description: `Automated scoping session for GoRan AI.\n\nLead Details:\n- Industry/Biz: ${session.leadData.bizType}\n- Challenge: ${session.leadData.challenge}\n- Current Process: ${session.leadData.process}\n- Team Size: ${session.leadData.teamSize}\n- Phone: +${session.leadData.phone}\n- Email: ${session.leadData.email}\n- Questions: ${session.leadData.questionsAsked.join(', ') || 'None'}`,
+        startIso: parsedTime.start,
+        endIso: parsedTime.end,
+        attendeeEmail: session.leadData.email || ''
+      });
+
+      session.leadData.meetingTime = parsedTime.readable;
+      session.leadData.meetingLink = eventLink || undefined;
+
+      const confirmResponse = await askGemini(
+        `The meeting has been successfully booked for ${parsedTime.readable} (IST). A Google Calendar invitation has been sent to ${session.leadData.email}. ${eventLink ? `Meeting link: ${eventLink}` : ''}. Confirm this enthusiastically to the user and invite them to continue chatting about anything else.`,
+        session.history,
+        config.systemInstruction
+      );
+
+      session.history.push({ role: 'user', parts: [{ text: userText }] });
+      session.history.push({ role: 'model', parts: [{ text: confirmResponse }] });
+      await sock.sendMessage(remoteJid, { text: confirmResponse });
+      session.phase = 'chatting';
+
+    } catch (err: any) {
+      console.error('[MEETING-SCHEDULER] Google Calendar event creation failed:', err.message || err);
+      const errorResponse = await askGemini(
+        "There was a technical error connecting to Google Calendar. Apologize to the user, let them know the team will follow up via email with a scheduling link, and invite them to keep chatting.",
+        session.history,
+        config.systemInstruction
+      );
+      session.history.push({ role: 'user', parts: [{ text: userText }] });
+      session.history.push({ role: 'model', parts: [{ text: errorResponse }] });
+      await sock.sendMessage(remoteJid, { text: errorResponse });
+      session.phase = 'chatting';
+    }
+  } else {
+    // Couldn't parse — ask again via AI
+    const retryResponse = await askGemini(
+      `The user tried to provide a meeting time but I couldn't parse "${userText}". Ask them politely to try a clearer format like "Tomorrow at 3 PM" or "June 10 at 11 AM". Also mention they can type "skip" to defer.`,
+      session.history,
+      config.systemInstruction
+    );
+    session.history.push({ role: 'user', parts: [{ text: userText }] });
+    session.history.push({ role: 'model', parts: [{ text: retryResponse }] });
+    await sock.sendMessage(remoteJid, { text: retryResponse });
+  }
+}
+
+/**
+ * Triggers the booking flow by asking for preferred date/time
  */
 async function initiateBookingFlow(sock: WASocket, remoteJid: string, session: Session) {
-  if (session.leadData.email) {
-    session.state = 'QUAL_MEETING';
-    const meetingPitch = "📅 *Let's book your scoping call directly!* Please reply with your preferred date and time (e.g. *Tomorrow at 3 PM*, or *Friday at 11 AM*).\n\nOr reply with *skip* if you prefer to schedule it later.";
-    await sock.sendMessage(remoteJid, { text: meetingPitch });
-  } else {
-    session.state = 'QUAL_EMAIL';
-    const emailPitch = "📅 *Let's book your scoping call directly!* What is the best email address to send the calendar invitation and scoping summary to?";
-    await sock.sendMessage(remoteJid, { text: emailPitch });
+  session.phase = 'booking';
+
+  // If we don't have email yet, ask for it first via AI
+  if (!session.leadData.email) {
+    const emailAsk = await askGemini(
+      "The user wants to book a call but we don't have their email yet. Ask for their email address naturally — explain we need it to send the calendar invitation and a summary of the opportunities discussed. Then ask for their preferred date and time.",
+      session.history,
+      config.systemInstruction
+    );
+    // Temporarily go back to qualifying to collect email first, then re-trigger
+    session.phase = 'qualifying';
+    session.history.push({ role: 'model', parts: [{ text: emailAsk }] });
+    await sock.sendMessage(remoteJid, { text: emailAsk });
+    return;
   }
+
+  await sock.sendPresenceUpdate('composing', remoteJid);
+  const bookingPrompt = await askGemini(
+    "The user wants to book a strategy call. Ask them enthusiastically for their preferred date and time (e.g., 'Tomorrow at 3 PM' or 'Friday at 11 AM'). Mention they can also type 'skip' to schedule later. Keep it brief and WhatsApp-friendly.",
+    session.history,
+    config.systemInstruction
+  );
+  session.history.push({ role: 'model', parts: [{ text: bookingPrompt }] });
+  await sock.sendMessage(remoteJid, { text: bookingPrompt });
 }
 
 /**
- * Handle lead evaluation scoring, database record write, and send email alerts
+ * Handle lead scoring, saving, and email notifications
  */
-async function processAndSaveCompletedLead(sock: WASocket, remoteJid: string, senderNumber: string, session: Session) {
-  // Score the lead using Gemini
-  await sock.sendPresenceUpdate('composing', remoteJid);
-  const scoreResult = await processCompletedLead(session.leadData);
+async function processAndSaveCompletedLead(sock: WASocket, remoteJid: string, session: Session) {
+  if (session.leadSaved) return;
+  session.leadSaved = true;
 
+  // Score the lead using Gemini
+  const scoreResult = await scoreCompletedLead(session.leadData);
   session.leadData.score = scoreResult.score;
   session.leadData.scoreReason = scoreResult.reason;
   session.leadData.summaryBlock = scoreResult.summary;
 
-  // Save lead locally
-  saveLeadRecord(session.leadData);
+  // Save lead locally to file
+  saveLeadToFile(session.leadData);
 
-  // Send Email Alerts via Nodemailer
+  // Send email alerts
   await sendLeadEmails({
-    phone: senderNumber,
+    phone: session.leadData.phone,
     bizType: session.leadData.bizType || '',
     challenge: session.leadData.challenge || '',
     process: session.leadData.process || '',
@@ -319,185 +407,118 @@ async function processAndSaveCompletedLead(sock: WASocket, remoteJid: string, se
     meetingLink: session.leadData.meetingLink
   });
 
-  // Reset state to AI_CHAT
-  session.state = 'AI_CHAT';
-
-  const completionMsg = "🎉 *Thank you! Your details and preferences have been recorded.*\n\n🤖 *Chat is active.* Feel free to ask me any other questions about GoRan AI!";
-  await sock.sendMessage(remoteJid, { text: completionMsg });
+  // Transition to chatting phase
+  session.phase = 'chatting';
+  console.log(`[LEAD-COMPLETE] Lead processed and saved for ${session.leadData.phone}. Score: ${scoreResult.score}`);
 }
 
 /**
- * Heuristics to check if user is asking a question instead of answering
+ * Parses user preferred meeting time using Gemini API
  */
-function isAskingQuestion(text: string): boolean {
-  const lower = text.toLowerCase();
-  const questionWords = ['what', 'how', 'why', 'who', 'when', 'where', 'which', 'can you', 'does it', 'is there', 'price', 'cost', 'how much', 'rate', 'timeline', 'security', 'safe', 'meeting', 'call', 'appointment'];
-  const hasQuestionMark = text.includes('?');
-  const startsWithQuestionWord = questionWords.some(word => lower.startsWith(word) || lower.includes(' ' + word));
-  return hasQuestionMark || startsWithQuestionWord;
+async function parseMeetingTimeWithGemini(userText: string): Promise<{ start: string, end: string, readable: string } | null> {
+  const currentLocalTime = new Date().toString();
+  const prompt = `You are a scheduling parser. Today is: ${currentLocalTime} (India, IST).
+The user wants a 15-minute slot: "${userText}".
+
+Parse this relative to current time (assume year 2026) and output ONLY a JSON object:
+{
+  "start": "ISO 8601 with +05:30 offset",
+  "end": "ISO 8601 15 min after start",
+  "readable": "e.g. Thursday, June 4 at 3:00 PM"
 }
 
-/**
- * Returns prompt question text for guiding users back
- */
-function getCurrentQuestionText(state: string): string {
-  switch (state) {
-    case 'QUAL_BIZ_TYPE':
-      return "What type of business do you run?";
-    case 'QUAL_CHALLENGE':
-      return "What's the biggest challenge you're facing right now? (Lead Generation, Operations, Customer Support, Recruitment, Follow-Ups, Something Else)";
-    case 'QUAL_PROCESS':
-      return "How are you currently handling this process?";
-    case 'QUAL_TEAM_SIZE':
-      return "Roughly how many employees are on your team?";
-    case 'QUAL_EMAIL':
-      return "What's the best email address for that?";
-    case 'QUAL_MEETING':
-      return "Would you like to schedule your 15-minute scoping call directly now? (Or reply with 'skip')";
-    default:
-      return "";
-  }
-}
-
-/**
- * Dynamic value recommendation generator
- */
-async function generateValueProposition(bizType: string, challenge: string, process: string, teamSize: string): Promise<string> {
-  const prompt = `Based on these business details:
-- Business Type: ${bizType}
-- Biggest Challenge: ${challenge}
-- Current Process: ${process}
-- Team Size: ${teamSize}
-
-Please generate a highly professional, consultative value recommendation for GoRan AI.
-Identify 3-4 specific areas where custom AI calling agents, voice agents, WhatsApp bots, or CRM automation can help this business save time and grow.
-Use bullet points. Keep it punchy and direct for a WhatsApp message (use *bold* for headings).
-Do not ask them to book a call yet, just give them value. Make them feel: "These guys actually understand my business."`;
+If unparseable, output: {}`;
 
   try {
-    return await askGemini(prompt, []);
+    const rawReply = await askGeminiRaw(prompt);
+    const result = parseGeminiJson(rawReply);
+    if (!result || Object.keys(result).length === 0) return null;
+    if (!result.start || !result.end) return null;
+    return result;
   } catch (error) {
-    console.error('Error generating value proposition:', error);
-    return `• Lead qualification automation\n• Follow-up sequences\n• CRM updates and dashboard synchronization`;
+    console.error('[MEETING-PARSER] Error parsing date with Gemini:', error);
+    return null;
   }
 }
 
 /**
- * Lead scoring and summary block generator
+ * Lead scoring using Gemini
  */
-async function processCompletedLead(leadData: any): Promise<{ score: string, reason: string, summary: string }> {
-  const prompt = `A prospect has completed our WhatsApp qualification flow. Here are the details:
+async function scoreCompletedLead(leadData: LeadData): Promise<{ score: string, reason: string, summary: string }> {
+  const prompt = `Score this qualified lead:
 - Phone: ${leadData.phone}
-- Business Type: ${leadData.bizType || 'Not provided'}
-- Challenge: ${leadData.challenge || 'Not provided'}
-- Current Process: ${leadData.process || 'Not provided'}
-- Team Size: ${leadData.teamSize || 'Not provided'}
-- Email: ${leadData.email || 'Not provided'}
-- Questions Asked: ${leadData.questionsAsked.join(', ') || 'None'}
+- Business: ${leadData.bizType || 'N/A'}
+- Challenge: ${leadData.challenge || 'N/A'}
+- Current Process: ${leadData.process || 'N/A'}
+- Team Size: ${leadData.teamSize || 'N/A'}
+- Email: ${leadData.email || 'N/A'}
+- Questions: ${leadData.questionsAsked.join(', ') || 'None'}
 
-Please perform lead scoring and summarize this lead:
-1. Provide a score from 1 to 10 (e.g. "9/10").
-2. Provide a 1-sentence reason for this score (based on business size, pain severity, budget/pricing questions, and response quality).
-3. Generate a structured text summary block representing the lead exactly like this:
-Lead Name: [Infer name or write Unknown]
-Phone: [Phone]
-Industry: [Industry]
-Business Size: [Size]
-Current Challenges:
-- [Challenge]
-Pain Points:
-- [Pain Points]
-Interest Level: [High/Medium/Low]
-Call Readiness: [Interested in next 30 days/Curious]
-Questions Asked:
-- [Questions]
-Recommended Solution:
-- [Solutions]
-
-Output your response as a JSON string matching this structure:
+Output ONLY JSON:
 {
-  "score": "9/10",
-  "reason": "Reason here...",
-  "summary": "Full formatted summary block here..."
+  "score": "X/10",
+  "reason": "One sentence reason",
+  "summary": "Formatted lead summary block"
 }`;
 
   try {
-    const rawReply = await askGemini(prompt, []);
+    const rawReply = await askGeminiRaw(prompt);
     const result = parseGeminiJson(rawReply);
     return {
       score: result.score || '5/10',
       reason: result.reason || 'N/A',
-      summary: result.summary || 'Summary could not be generated'
+      summary: result.summary || 'Summary unavailable'
     };
   } catch (error) {
-    console.error('Error scoring completed lead:', error);
+    console.error('Error scoring lead:', error);
     return {
       score: '5/10',
-      reason: 'Failed to generate score automatically',
-      summary: `Phone: ${leadData.phone}\nBusiness Type: ${leadData.bizType || 'N/A'}\nChallenge: ${leadData.challenge || 'N/A'}`
+      reason: 'Auto-scoring failed',
+      summary: `Phone: ${leadData.phone}\nBusiness: ${leadData.bizType || 'N/A'}\nChallenge: ${leadData.challenge || 'N/A'}`
     };
   }
 }
 
 /**
- * Timeout lead compiler
+ * Score a timed-out partial lead
  */
-async function processTimeoutLead(leadData: any): Promise<{ score: string, reason: string, summary: string }> {
-  const prompt = `A prospect started our WhatsApp qualification flow but became inactive. Here are the partial details collected:
+async function scoreTimeoutLead(leadData: LeadData): Promise<{ score: string, reason: string, summary: string }> {
+  const prompt = `Score this PARTIAL lead (user went inactive):
 - Phone: ${leadData.phone}
-- Business Type: ${leadData.bizType || 'Not provided'}
+- Business: ${leadData.bizType || 'Not provided'}
 - Challenge: ${leadData.challenge || 'Not provided'}
-- Current Process: ${leadData.process || 'Not provided'}
+- Process: ${leadData.process || 'Not provided'}
 - Team Size: ${leadData.teamSize || 'Not provided'}
 - Email: ${leadData.email || 'Not provided'}
-- Questions Asked: ${leadData.questionsAsked.join(', ') || 'None'}
+- Questions: ${leadData.questionsAsked.join(', ') || 'None'}
 
-Please perform lead scoring and summarize this partial lead:
-1. Provide a score from 1 to 10.
-2. Provide a 1-sentence reason for this score (based on business size, pain severity, and response quality).
-3. Generate a structured text summary block representing the lead exactly like this:
-Lead Name: [Infer name or write Unknown]
-Phone: [Phone]
-Industry: [Industry]
-Business Size: [Size]
-Current Challenges:
-- [Challenge]
-Pain Points:
-- [Pain Points]
-Interest Level: [Medium/Low]
-Call Readiness: [Curious]
-Questions Asked:
-- [Questions]
-Recommended Solution:
-- [Solutions]
-
-Output your response as a JSON string matching this structure:
+Output ONLY JSON:
 {
-  "score": "5/10",
-  "reason": "Reason here...",
-  "summary": "Full formatted summary block here..."
+  "score": "X/10",
+  "reason": "One sentence reason",
+  "summary": "Formatted lead summary"
 }`;
 
   try {
-    const rawReply = await askGemini(prompt, []);
+    const rawReply = await askGeminiRaw(prompt);
     const result = parseGeminiJson(rawReply);
     return {
-      score: result.score || '5/10',
+      score: result.score || '4/10',
       reason: result.reason || 'N/A',
-      summary: result.summary || 'Summary could not be generated'
+      summary: result.summary || 'Partial lead'
     };
   } catch (error) {
     console.error('Error scoring timeout lead:', error);
     return {
       score: '4/10',
-      reason: 'Failed to generate score automatically on timeout',
-      summary: `Phone: ${leadData.phone}\nPartial Details: Business Type: ${leadData.bizType || 'N/A'}`
+      reason: 'Auto-scoring failed on timeout',
+      summary: `Phone: ${leadData.phone}\nBusiness: ${leadData.bizType || 'N/A'}`
     };
   }
 }
 
 /**
- * Start/Refresh the 15-minute inactivity timer
+ * Refresh the 15-minute inactivity timer
  */
 function refreshSessionTimeout(sock: WASocket, remoteJid: string) {
   const session = sessions[remoteJid];
@@ -521,19 +542,21 @@ async function handleSessionTimeout(sock: WASocket, remoteJid: string) {
 
   console.log(`[TIMEOUT-TRIGGERED] Inactivity timeout for JID: ${remoteJid}`);
 
-  // Only compile and save lead if they answered at least Q1 (bizType is not empty) and haven't completed
-  if (session.state !== 'AI_CHAT' && session.leadData && session.leadData.bizType) {
-    console.log(`[TIMEOUT-LEAD-COMPILATION] Compiling partial details for: ${session.leadData.phone}`);
-    
+  // Save partial lead if user provided at least some info
+  if (!session.leadSaved && session.leadData.bizType) {
+    console.log(`[TIMEOUT-LEAD] Compiling partial lead for: ${session.leadData.phone}`);
+
     try {
-      const result = await processTimeoutLead(session.leadData);
+      // Extract any remaining data from conversation
+      await extractQualificationData(session);
+
+      const result = await scoreTimeoutLead(session.leadData);
       session.leadData.score = result.score;
       session.leadData.scoreReason = result.reason;
       session.leadData.summaryBlock = result.summary;
 
-      saveLeadRecord(session.leadData);
-      
-      // Send partial lead email notification via SMTP
+      saveLeadToFile(session.leadData);
+
       await sendLeadEmails({
         phone: session.leadData.phone,
         bizType: session.leadData.bizType || 'Partial Info',
@@ -547,25 +570,28 @@ async function handleSessionTimeout(sock: WASocket, remoteJid: string) {
         meetingTime: session.leadData.meetingTime,
         meetingLink: session.leadData.meetingLink
       });
-      
-      const timeoutMessage = "It's been a while, so I've saved the details you shared. If you'd like to resume or speak with our team, feel free to drop a message anytime!";
-      await sock.sendMessage(remoteJid, { text: timeoutMessage });
+
+      const timeoutMsg = await askGemini(
+        "The user has been inactive for 15 minutes. Send them a brief, warm message saying you've saved their details and they can come back anytime to resume the conversation or book a call.",
+        session.history,
+        config.systemInstruction
+      );
+      await sock.sendMessage(remoteJid, { text: timeoutMsg });
     } catch (err) {
       console.error('Error compiling timeout lead:', err);
     }
   }
 
-  // Clear session cache
   delete sessions[remoteJid];
 }
 
 /**
- * Save lead record helper
+ * Save lead record to local JSON file
  */
-function saveLeadRecord(leadData: any) {
+function saveLeadToFile(leadData: LeadData) {
   const filePath = path.join(__dirname, '../leads.json');
   let leads: any[] = [];
-  
+
   try {
     if (fs.existsSync(filePath)) {
       const fileData = fs.readFileSync(filePath, 'utf8');
@@ -575,7 +601,6 @@ function saveLeadRecord(leadData: any) {
     console.error('Error reading leads.json:', error);
   }
 
-  // Strip circular/timer references
   const record = {
     phone: leadData.phone,
     bizType: leadData.bizType,
@@ -596,7 +621,7 @@ function saveLeadRecord(leadData: any) {
 
   try {
     fs.writeFileSync(filePath, JSON.stringify(leads, null, 2), 'utf8');
-    console.log(`[LEAD-RECORDED] Lead saved locally for ${leadData.phone}. Score: ${leadData.score}`);
+    console.log(`[LEAD-SAVED] Lead saved locally for ${leadData.phone}. Score: ${leadData.score}`);
   } catch (error) {
     console.error('Error writing leads.json:', error);
   }
@@ -608,8 +633,7 @@ function saveLeadRecord(leadData: any) {
 }
 
 /**
- * Safely extracts and parses JSON from a Gemini string response.
- * Handles conversational prefixes/suffixes, markdown code blocks, etc.
+ * Safely extract JSON from a Gemini response
  */
 function parseGeminiJson(rawReply: string): any {
   const firstBrace = rawReply.indexOf('{');
