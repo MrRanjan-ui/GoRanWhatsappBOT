@@ -33,7 +33,7 @@ export async function askGemini(messageText: string, history: GeminiMessage[] = 
       "\n\nCRITICAL DIRECTIVE ON APPOINTMENTS: If the user asks to book an appointment, schedule a call, request a meeting, start a project, get a quote, or book a scoping call, you MUST reply with the exact text: `[TRIGGER_BOOKING]` and nothing else. Do not output the booking link. Let the system handle the booking flow directly in the chat.";
 
     const model = genAI.getGenerativeModel({
-      model: 'gemini-2.5-flash',
+      model: 'gemini-2.5-flash-lite',
       systemInstruction: modifiedInstruction
     });
 
