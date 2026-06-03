@@ -264,9 +264,8 @@ If the text cannot be resolved as a valid date and time, return an empty JSON: {
 
   try {
     const rawReply = await askGemini(prompt, []);
-    const cleanJson = rawReply.replace(/```json/gi, '').replace(/```/g, '').trim();
-    if (cleanJson === '{}') return null;
-    const result = JSON.parse(cleanJson);
+    const result = parseGeminiJson(rawReply);
+    if (!result || Object.keys(result).length === 0) return null;
     if (!result.start || !result.end) return null;
     return result;
   } catch (error) {
@@ -424,8 +423,7 @@ Output your response as a JSON string matching this structure:
 
   try {
     const rawReply = await askGemini(prompt, []);
-    const cleanJson = rawReply.replace(/```json/gi, '').replace(/```/g, '').trim();
-    const result = JSON.parse(cleanJson);
+    const result = parseGeminiJson(rawReply);
     return {
       score: result.score || '5/10',
       reason: result.reason || 'N/A',
@@ -482,8 +480,7 @@ Output your response as a JSON string matching this structure:
 
   try {
     const rawReply = await askGemini(prompt, []);
-    const cleanJson = rawReply.replace(/```json/gi, '').replace(/```/g, '').trim();
-    const result = JSON.parse(cleanJson);
+    const result = parseGeminiJson(rawReply);
     return {
       score: result.score || '5/10',
       reason: result.reason || 'N/A',
@@ -608,4 +605,19 @@ function saveLeadRecord(leadData: any) {
   saveLead(record).catch(err => {
     console.error('[DB-LEADS] Failed to save lead to MongoDB:', err.message || err);
   });
+}
+
+/**
+ * Safely extracts and parses JSON from a Gemini string response.
+ * Handles conversational prefixes/suffixes, markdown code blocks, etc.
+ */
+function parseGeminiJson(rawReply: string): any {
+  const firstBrace = rawReply.indexOf('{');
+  const lastBrace = rawReply.lastIndexOf('}');
+  if (firstBrace === -1 || lastBrace === -1 || lastBrace < firstBrace) {
+    throw new Error('No JSON object found in response');
+  }
+  const cleanJson = rawReply.substring(firstBrace, lastBrace + 1).trim();
+  if (cleanJson === '{}') return {};
+  return JSON.parse(cleanJson);
 }
