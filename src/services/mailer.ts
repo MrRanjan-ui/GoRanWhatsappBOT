@@ -1,0 +1,169 @@
+import * as nodemailer from 'nodemailer';
+import * as dotenv from 'dotenv';
+
+// Ensure env variables are configured
+dotenv.config();
+
+const smtpHost = process.env.SMTP_HOST || '';
+const smtpPort = Number(process.env.SMTP_PORT) || 465;
+const smtpUser = process.env.SMTP_USER || '';
+const smtpPass = process.env.SMTP_PASS || '';
+const notificationEmail = process.env.NOTIFICATION_EMAIL || 'goran.dotin@gmail.com';
+
+// Initialize SMTP transporter
+const transporter = nodemailer.createTransport({
+  host: smtpHost,
+  port: smtpPort,
+  secure: smtpPort === 465, // true for 465, false for 587 (TLS/STARTTLS)
+  auth: {
+    user: smtpUser,
+    pass: smtpPass
+  }
+});
+
+export interface SendLeadEmailParams {
+  phone: string;
+  bizType: string;
+  challenge: string;
+  process: string;
+  teamSize: string;
+  email: string;
+  score: string;
+  scoreReason: string;
+  summaryBlock: string;
+  meetingTime?: string;
+  meetingLink?: string;
+}
+
+/**
+ * Sends HTML emails to the agency (lead alert) and prospect (recap summary).
+ */
+export async function sendLeadEmails(params: SendLeadEmailParams) {
+  // Skip if SMTP credentials are the placeholder defaults
+  if (!smtpHost || !smtpUser || !smtpPass || smtpPass.includes('YOUR_') || smtpUser.includes('your-')) {
+    console.warn('[MAIL-SERVICE] SMTP mailer settings are not configured. Skipping email notifications.');
+    return;
+  }
+
+  // 1. Email to Agency Inbox (Lead alert)
+  const agencyMailOptions = {
+    from: `"GoRan AI Lead Bot" <${smtpUser}>`,
+    to: notificationEmail,
+    subject: `🔥 New Qualified Lead: ${params.bizType} (${params.score})`,
+    html: `
+      <div style="font-family: Arial, sans-serif; line-height: 1.6; color: #333; max-width: 600px; margin: 0 auto; border: 1px solid #ddd; padding: 20px; border-radius: 8px;">
+        <h2 style="color: #F6C744; border-bottom: 2px solid #F6C744; padding-bottom: 8px;">New Qualified Lead Details</h2>
+        <table style="width: 100%; border-collapse: collapse;">
+          <tr>
+            <td style="padding: 6px 0; font-weight: bold; width: 35%;">Phone Number JID:</td>
+            <td style="padding: 6px 0;">+${params.phone}</td>
+          </tr>
+          <tr>
+            <td style="padding: 6px 0; font-weight: bold;">Contact Email:</td>
+            <td style="padding: 6px 0;"><a href="mailto:${params.email}">${params.email}</a></td>
+          </tr>
+          <tr>
+            <td style="padding: 6px 0; font-weight: bold;">Business Type:</td>
+            <td style="padding: 6px 0;">${params.bizType}</td>
+          </tr>
+          <tr>
+            <td style="padding: 6px 0; font-weight: bold;">Biggest Challenge:</td>
+            <td style="padding: 6px 0;">${params.challenge}</td>
+          </tr>
+          <tr>
+            <td style="padding: 6px 0; font-weight: bold;">Current Workflow:</td>
+            <td style="padding: 6px 0;">${params.process}</td>
+          </tr>
+          <tr>
+            <td style="padding: 6px 0; font-weight: bold;">Team Size:</td>
+            <td style="padding: 6px 0;">${params.teamSize} employees</td>
+          </tr>
+        </table>
+        
+        <div style="background-color: #f9f9f9; padding: 15px; border-radius: 6px; margin: 20px 0; border-left: 4px solid #F6C744;">
+          <h3 style="margin-top: 0; color: #333;">AI Lead Scoring: <span style="color: #e67e22; font-weight: bold;">${params.score}</span></h3>
+          <p style="margin-bottom: 0;"><strong>Reason:</strong> ${params.scoreReason}</p>
+        </div>
+
+        <h3>Structured Summary Block:</h3>
+        <pre style="background: #2d3748; color: #fff; padding: 15px; border-radius: 6px; font-family: monospace; white-space: pre-wrap; font-size: 13px; line-height: 1.4;">${params.summaryBlock}</pre>
+
+        <div style="margin-top: 20px; font-size: 14px;">
+          ${params.meetingTime ? 
+            `<p style="background-color: #d4edda; color: #155724; padding: 12px; border-radius: 6px; border: 1px solid #c3e6cb;">
+              📅 <strong>Scoping Call Scheduled!</strong><br />
+              Time: <strong>${params.meetingTime}</strong><br />
+              <a href="${params.meetingLink}" style="color: #155724; font-weight: bold; text-decoration: underline;">View on Google Calendar</a>
+             </p>` : 
+            `<p style="background-color: #fff3cd; color: #856404; padding: 12px; border-radius: 6px; border: 1px solid #ffeeba;">
+              📅 <strong>Scoping Call Scheduled:</strong> No (Client skipped/deferred)
+             </p>`
+          }
+        </div>
+      </div>
+    `
+  };
+
+  // 2. Email to Prospect (Client follow-up recap)
+  const clientMailOptions = {
+    from: `"Ashish Ranjan | GoRan AI" <${smtpUser}>`,
+    to: params.email,
+    subject: `Recap: GoRan AI Scoping Session & Automation Opportunities`,
+    html: `
+      <div style="font-family: Arial, sans-serif; line-height: 1.6; color: #333; max-width: 600px; margin: 0 auto; padding: 20px;">
+        <p>Hi,</p>
+        <p>Thanks for taking a few minutes to share details about your business with the GoRan AI assistant today! I've reviewed your inputs and put together a few preliminary thoughts for your business: <strong>${params.bizType}</strong>.</p>
+        
+        <h3 style="color: #F6C744; border-bottom: 1px solid #ddd; padding-bottom: 5px;">AI Opportunities Identified:</h3>
+        <p>Based on your biggest operational challenge with <strong>${params.challenge}</strong>, here are a few immediate areas where custom AI agents can automate tasks for your team of ${params.teamSize} employees:</p>
+        <ul>
+          <li><strong>Workflow Automation</strong>: Eliminating manual steps in your current process (<em>${params.process}</em>) using secure database loops and API connections.</li>
+          <li><strong>Lead Engagement</strong>: Deploying active WhatsApp/Email follow-up loops to prevent leads from slipping through the cracks.</li>
+          <li><strong>Autonomous Support</strong>: Streamlining inquiries into a unified dashboard to save hours of manual coordination.</li>
+        </ul>
+        
+        ${params.meetingTime ? `
+        <div style="background-color: #e8f4fd; border: 1px solid #b8daff; padding: 15px; border-radius: 6px; margin: 20px 0;">
+          <h4 style="margin-top: 0; color: #004085; font-size: 16px;">📅 Strategy Session Confirmed</h4>
+          <p style="margin-bottom: 8px;">Our 15-minute scoping call is locked in for:</p>
+          <p style="font-size: 18px; font-weight: bold; margin: 5px 0; color: #004085;">${params.meetingTime} (IST)</p>
+          <p style="font-size: 13px; margin-bottom: 0; color: #666;">
+            A Google Calendar invitation has been dispatched. You can also view the event directly here: 
+            <a href="${params.meetingLink}" style="color: #004085; font-weight: bold; text-decoration: underline;">Open Calendar Link</a>
+          </p>
+        </div>
+        ` : `
+        <div style="background-color: #fff3cd; border: 1px solid #ffeeba; padding: 15px; border-radius: 6px; margin: 20px 0;">
+          <h4 style="margin-top: 0; color: #856404; font-size: 16px;">📅 Book Your Strategy Session</h4>
+          <p style="margin-bottom: 8px;">If you haven't booked a slot yet, a quick 15-minute call is the fastest way to map out an implementation roadmap for your business.</p>
+          <a href="https://www.goran.in/?book=true" style="display: inline-block; background-color: #F6C744; color: #111; padding: 10px 20px; text-decoration: none; font-weight: bold; border-radius: 6px; margin-top: 5px;">Schedule Call Now</a>
+        </div>
+        `}
+        
+        <p>I look forward to discussing how we can save your team hours of manual effort.</p>
+        
+        <hr style="border: 0; border-top: 1px solid #eee; margin: 20px 0;" />
+        <p style="font-size: 14px; margin-bottom: 0;">
+          Best regards,<br /><br />
+          <strong>Ashish Ranjan</strong><br />
+          Founder & AI Systems Architect, GoRan AI<br />
+          <a href="https://goran.in" style="color: #F6C744; text-decoration: none;">goran.in</a>
+        </p>
+      </div>
+    `
+  };
+
+  try {
+    // Send agency notification
+    const agencyInfo = await transporter.sendMail(agencyMailOptions);
+    console.log(`[MAIL-SERVICE] Lead alert email dispatched to agency inbox: ${agencyInfo.messageId}`);
+    
+    // Send client recap
+    if (params.email && params.email.includes('@')) {
+      const clientInfo = await transporter.sendMail(clientMailOptions);
+      console.log(`[MAIL-SERVICE] Opportunity recap email dispatched to prospect: ${clientInfo.messageId}`);
+    }
+  } catch (error: any) {
+    console.error('[MAIL-SERVICE] Email dispatch failed:', error.message || error);
+  }
+}
