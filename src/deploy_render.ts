@@ -60,13 +60,15 @@ async function deploy() {
     branch: 'main',
     autoDeploy: 'yes',
     ownerId: workspaceId,
+    envVars: envVars,
     serviceDetails: {
-      runtime: 'node',
-      buildCommand: 'npm run build',
-      startCommand: 'npm run start',
+      env: 'node',
       plan: 'free',
       region: 'oregon',
-      envVars: envVars
+      envSpecificDetails: {
+        buildCommand: 'npm run build',
+        startCommand: 'npm run start'
+      }
     }
   };
 
