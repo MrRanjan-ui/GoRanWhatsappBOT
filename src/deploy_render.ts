@@ -5,7 +5,7 @@ import * as path from 'path';
 dotenv.config();
 
 const RENDER_API_KEY = 'rnd_uCI9wT7ugoWO8YsZquaXzCCBtPID';
-const REPO_URL = 'https://github.com/MrRanjan-ui/GoRanWhatsappBOT';
+const REPO_URL = 'https://github.com/MrRanjan-ui/GoRanWhatsappBOT.git';
 
 async function deploy() {
   console.log('🚀 Initiating automated Render deployment...');
