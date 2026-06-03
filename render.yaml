@@ -1,0 +1,40 @@
+services:
+  - type: web
+    name: goran-whatsapp-bot
+    env: node
+    plan: free # Render's free tier (does not support persistent disks)
+    buildCommand: npm run build
+    startCommand: npm run start
+    envVars:
+      - key: PORT
+        value: 3000
+      - key: ALLOWED_NUMBERS
+        value: 916203025198
+      - key: MONGODB_URI
+        placeholder: "Insert your MongoDB Atlas URI here"
+      - key: GEMINI_API_KEY
+        placeholder: "Insert your Gemini API key"
+      - key: GOOGLE_SERVICE_ACCOUNT_EMAIL
+        placeholder: "Insert Google service account email"
+      - key: GOOGLE_PRIVATE_KEY
+        placeholder: "Insert Google private key (in double quotes)"
+      - key: GOOGLE_CALENDAR_ID
+        value: goran.dotin@gmail.com
+      - key: SMTP_HOST
+        value: smtp.gmail.com
+      - key: SMTP_PORT
+        value: 465
+      - key: SMTP_USER
+        value: goran.dotin@gmail.com
+      - key: SMTP_PASS
+        placeholder: "Insert SMTP App Password"
+      - key: NOTIFICATION_EMAIL
+        value: goran.dotin@gmail.com
+      # Note: To use a persistent disk for WhatsApp sessions, 
+      # you must change the plan above to "standard" and uncomment the disk section below.
+      # disk:
+      #   name: whatsapp-session-data
+      #   mountPath: /data
+      #   sizeGB: 1
+      # - key: AUTH_DIR
+      #   value: /data/auth_info_baileys
