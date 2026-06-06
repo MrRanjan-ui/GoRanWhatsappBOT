@@ -52,6 +52,17 @@ export async function sendLeadEmails(params: SendLeadEmailParams) {
     from: `"GoRan AI Lead Bot" <${smtpUser}>`,
     to: notificationEmail,
     subject: `🔥 New Qualified Lead: ${params.bizType} (${params.score})`,
+    text: `New Qualified Lead Details:\n\n` +
+          `Phone Number: +${params.phone}\n` +
+          `Contact Email: ${params.email}\n` +
+          `Business Type: ${params.bizType}\n` +
+          `Biggest Challenge: ${params.challenge}\n` +
+          `Current Workflow: ${params.process}\n` +
+          `Team Size: ${params.teamSize} employees\n` +
+          `AI Lead Scoring: ${params.score}\n` +
+          `Reason: ${params.scoreReason}\n\n` +
+          `Summary Block:\n${params.summaryBlock}\n\n` +
+          (params.meetingTime ? `Scoping Call Confirmed: ${params.meetingTime}\nLink: ${params.meetingLink}` : `Scoping Call Scheduled: No`),
     html: `
       <div style="font-family: Arial, sans-serif; line-height: 1.6; color: #333; max-width: 600px; margin: 0 auto; border: 1px solid #ddd; padding: 20px; border-radius: 8px;">
         <h2 style="color: #F6C744; border-bottom: 2px solid #F6C744; padding-bottom: 8px;">New Qualified Lead Details</h2>
@@ -113,6 +124,16 @@ export async function sendLeadEmails(params: SendLeadEmailParams) {
     subject: params.meetingTime
       ? `Confirmed: GoRan AI Strategy Call - ${params.meetingTime}`
       : `Recap: GoRan AI Scoping Session & Automation Opportunities`,
+    text: `Hi,\n\n` +
+          `Thanks for taking a few minutes to share details about your business with the GoRan AI assistant today! I've reviewed your inputs and put together a few preliminary thoughts for your business: ${params.bizType}.\n\n` +
+          `AI Opportunities Identified:\n` +
+          `- Workflow Automation: Eliminating manual steps in your current process (${params.process})\n` +
+          `- Lead Engagement: Deploying active WhatsApp/Email follow-up loops\n` +
+          `- Autonomous Support: Streamlining inquiries into a unified dashboard\n\n` +
+          (params.meetingTime 
+            ? `Our 15-minute scoping call is confirmed for:\n${params.meetingTime} (IST)\n\nCalendar Link: ${params.meetingLink}` 
+            : `Schedule a quick 15-minute scoping call here:\nhttps://www.goran.in/?book=true`) +
+          `\n\nBest regards,\n\nAshish Ranjan\nFounder & AI Systems Architect, GoRan AI\nhttps://goran.in`,
     html: `
       <div style="font-family: Arial, sans-serif; line-height: 1.6; color: #333; max-width: 600px; margin: 0 auto; padding: 20px;">
         <p>Hi,</p>
