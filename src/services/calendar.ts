@@ -39,13 +39,6 @@ export async function createCalendarEvent(params: CreateEventParams): Promise<st
   }
 
   try {
-    // Build attendees list (send calendar invite via email)
-    const attendees: { email: string }[] = [];
-    if (params.attendeeEmail && params.attendeeEmail.includes('@')) {
-      attendees.push({ email: params.attendeeEmail });
-      console.log(`[CALENDAR-SERVICE] Adding attendee: ${params.attendeeEmail}`);
-    }
-
     const event = {
       summary: params.summary,
       description: params.description,
@@ -57,7 +50,6 @@ export async function createCalendarEvent(params: CreateEventParams): Promise<st
         dateTime: params.endIso,
         timeZone: 'Asia/Kolkata',
       },
-      attendees: attendees.length > 0 ? attendees : undefined,
       reminders: {
         useDefault: true,
       },
@@ -67,11 +59,11 @@ export async function createCalendarEvent(params: CreateEventParams): Promise<st
       auth: auth,
       calendarId: calendarId,
       requestBody: event,
-      sendUpdates: 'all', // Send email notifications to attendees
+      sendUpdates: 'none',
     });
 
     const eventLink = response.data.htmlLink || 'success';
-    console.log(`[CALENDAR-SERVICE] Created calendar event. Link: ${eventLink}`);
+    console.log(`[CALENDAR-SERVICE] Created calendar event on organizer calendar. Link: ${eventLink}`);
     return eventLink;
   } catch (error: any) {
     console.error('[CALENDAR-SERVICE] Failed to create Google Calendar event:', error.message || error);

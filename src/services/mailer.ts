@@ -33,6 +33,8 @@ export interface SendLeadEmailParams {
   summaryBlock: string;
   meetingTime?: string;
   meetingLink?: string;
+  meetingStartIso?: string;
+  meetingEndIso?: string;
 }
 
 /**
@@ -105,10 +107,12 @@ export async function sendLeadEmails(params: SendLeadEmailParams) {
   };
 
   // 2. Email to Prospect (Client follow-up recap)
-  const clientMailOptions = {
+  const clientMailOptions: any = {
     from: `"Ashish Ranjan | GoRan AI" <${smtpUser}>`,
     to: params.email,
-    subject: `Recap: GoRan AI Scoping Session & Automation Opportunities`,
+    subject: params.meetingTime
+      ? `Confirmed: GoRan AI Strategy Call - ${params.meetingTime}`
+      : `Recap: GoRan AI Scoping Session & Automation Opportunities`,
     html: `
       <div style="font-family: Arial, sans-serif; line-height: 1.6; color: #333; max-width: 600px; margin: 0 auto; padding: 20px;">
         <p>Hi,</p>
@@ -128,7 +132,7 @@ export async function sendLeadEmails(params: SendLeadEmailParams) {
           <p style="margin-bottom: 8px;">Our 15-minute scoping call is locked in for:</p>
           <p style="font-size: 18px; font-weight: bold; margin: 5px 0; color: #004085;">${params.meetingTime} (IST)</p>
           <p style="font-size: 13px; margin-bottom: 0; color: #666;">
-            A Google Calendar invitation has been dispatched. You can also view the event directly here: 
+            A calendar invitation (.ics) has been attached to this email. You can also view the event directly here: 
             <a href="${params.meetingLink}" style="color: #004085; font-weight: bold; text-decoration: underline;">Open Calendar Link</a>
           </p>
         </div>
@@ -152,6 +156,80 @@ export async function sendLeadEmails(params: SendLeadEmailParams) {
       </div>
     `
   };
+
+  if (params.meetingStartIso && params.meetingEndIso) {
+    try {
+      const startDate = new Date(params.meetingStartIso);
+      const endDate = new Date(params.meetingEndIso);
+      
+      const formatUTCDateTime = (date: Date): string => {
+        const year = date.getUTCFullYear();
+        const month = String(date.getUTCMonth() + 1).padStart(2, '0');
+        const day = String(date.getUTCDate()).padStart(2, '0');
+        const hours = String(date.getUTCHours()).padStart(2, '0');
+        const minutes = String(date.getUTCMinutes()).padStart(2, '0');
+        const seconds = String(date.getUTCSeconds()).padStart(2, '0');
+        return `${year}${month}${day}T${hours}${minutes}${seconds}Z`;
+      };
+
+      const escapeICSValue = (val: string): string => {
+        return val
+          .replace(/\\/g, '\\\\')
+          .replace(/;/g, '\\;')
+          .replace(/,/g, '\\,')
+          .replace(/\n/g, '\\n')
+          .replace(/\r/g, '');
+      };
+
+      const uid = `goran-ai-${params.phone}-${startDate.getTime()}@goran.in`;
+      const dtStamp = formatUTCDateTime(new Date());
+      const dtStart = formatUTCDateTime(startDate);
+      const dtEnd = formatUTCDateTime(endDate);
+      
+      const summary = escapeICSValue(`GoRan AI Strategy Call: ${params.bizType || 'Prospect'} & Ashish Ranjan`);
+      const description = escapeICSValue(
+        `Automated scoping session for GoRan AI.\n\n` +
+        `Lead Details:\n` +
+        `- Business Type: ${params.bizType || 'TBD'}\n` +
+        `- Challenge: ${params.challenge || 'TBD'}\n` +
+        `- Current Process: ${params.process || 'TBD'}\n` +
+        `- Team Size: ${params.teamSize || 'TBD'}\n` +
+        `- Phone: +${params.phone}\n` +
+        `- Email: ${params.email || 'TBD'}` +
+        (params.meetingLink ? `\n- Reference Link: ${params.meetingLink}` : '')
+      );
+
+      const icsContent = [
+        'BEGIN:VCALENDAR',
+        'VERSION:2.0',
+        'PRODID:-//GoRan AI//Meeting Bot//EN',
+        'CALSCALE:GREGORIAN',
+        'METHOD:REQUEST',
+        'BEGIN:VEVENT',
+        `UID:${uid}`,
+        `DTSTAMP:${dtStamp}`,
+        `DTSTART:${dtStart}`,
+        `DTEND:${dtEnd}`,
+        `SUMMARY:${summary}`,
+        `DESCRIPTION:${description}`,
+        `ORGANIZER;CN="Ashish Ranjan":mailto:${smtpUser}`,
+        `ATTENDEE;CUTYPE=INDIVIDUAL;ROLE=REQ-PARTICIPANT;PARTSTAT=NEEDS-ACTION;RSVP=TRUE;CN="${params.email}":mailto:${params.email}`,
+        'STATUS:CONFIRMED',
+        'SEQUENCE:0',
+        'END:VEVENT',
+        'END:VCALENDAR'
+      ].join('\r\n');
+
+      clientMailOptions.icalEvent = {
+        filename: 'invite.ics',
+        method: 'request',
+        content: icsContent
+      };
+      console.log(`[MAIL-SERVICE] Generated .ics meeting invitation: UID=${uid}`);
+    } catch (icsErr: any) {
+      console.error('[MAIL-SERVICE] Failed to generate .ics string:', icsErr.message || icsErr);
+    }
+  }
 
   try {
     // Send agency notification

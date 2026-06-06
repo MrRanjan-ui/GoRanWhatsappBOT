@@ -23,6 +23,8 @@ interface LeadData {
   teamSize?: string;
   email?: string;
   meetingTime?: string;
+  meetingStartIso?: string;
+  meetingEndIso?: string;
   meetingLink?: string;
   score?: string;
   scoreReason?: string;
@@ -362,10 +364,12 @@ async function handleBookingResponse(remoteJid: string, session: Session, userTe
   // Extract email from this message if present
   const emailInMessage = extractEmailFromText(userText);
   let justProvidedEmail = false;
-  if (emailInMessage && !session.leadData.email) {
-    session.leadData.email = emailInMessage;
-    session.collectedFields.add('email');
-    console.log(`[BOOKING-EMAIL] Email captured: ${emailInMessage}`);
+  if (emailInMessage) {
+    if (!session.leadData.email) {
+      session.leadData.email = emailInMessage;
+      session.collectedFields.add('email');
+      console.log(`[BOOKING-EMAIL] Email captured: ${emailInMessage}`);
+    }
     justProvidedEmail = true;
   }
 
@@ -386,9 +390,11 @@ async function handleBookingResponse(remoteJid: string, session: Session, userTe
       });
 
       session.leadData.meetingTime = parsedTime.readable;
+      session.leadData.meetingStartIso = parsedTime.start;
+      session.leadData.meetingEndIso = parsedTime.end;
       session.leadData.meetingLink = eventLink || undefined;
 
-      const confirmMsg = `📅 *Meeting Confirmed!*\n\nYour strategy call has been scheduled for *${parsedTime.readable}* (IST).\n${session.leadData.email ? `A Google Calendar invitation has been sent to *${session.leadData.email}*.` : ''}\n${eventLink ? `\n🔗 Event Link: ${eventLink}` : ''}\n\nIs there anything else I can help you with? [BUTTONS: Explore Services | Ask Q&A | Finish]`;
+      const confirmMsg = `📅 *Meeting Confirmed!*\n\nYour strategy call has been scheduled for *${parsedTime.readable}* (IST).\n${session.leadData.email ? `A calendar invitation (.ics) has been sent to *${session.leadData.email}*.` : ''}\n${eventLink ? `\n🔗 Event Link: ${eventLink}` : ''}\n\nIs there anything else I can help you with? [BUTTONS: Explore Services | Ask Q&A | Finish]`;
 
       session.history.push({ role: 'user', parts: [{ text: userText }] });
       session.history.push({ role: 'model', parts: [{ text: confirmMsg }] });
@@ -402,12 +408,25 @@ async function handleBookingResponse(remoteJid: string, session: Session, userTe
         await updateLeadBookingDetails(session);
       }
     } catch (err: any) {
-      console.error('[MEETING-SCHEDULER] Google Calendar event creation failed:', err.message || err);
-      const errorMsg = `⚠️ I had trouble creating the Google Calendar event, but I've noted your preference for *${parsedTime.readable}* (IST). Our team will send you a calendar invitation via email shortly.\n\nIs there anything else I can help you with? [BUTTONS: Explore Services | Ask Q&A | Finish]`;
+      console.error('[MEETING-SCHEDULER] Google Calendar event creation failed, falling back to email calendar invite:', err.message || err);
+      
+      // Store time details even if calendar insert failed
+      session.leadData.meetingTime = parsedTime.readable;
+      session.leadData.meetingStartIso = parsedTime.start;
+      session.leadData.meetingEndIso = parsedTime.end;
+
+      const errorMsg = `📅 *Meeting Confirmed!*\n\nYour strategy call has been scheduled for *${parsedTime.readable}* (IST).\n${session.leadData.email ? `A calendar invitation (.ics) has been sent to *${session.leadData.email}*.` : ''}\n\nIs there anything else I can help you with? [BUTTONS: Explore Services | Ask Q&A | Finish]`;
       session.history.push({ role: 'user', parts: [{ text: userText }] });
       session.history.push({ role: 'model', parts: [{ text: errorMsg }] });
       await sendWhatsAppReply(remoteJid, errorMsg);
       session.phase = 'chatting';
+
+      // Save lead if not already saved, otherwise update the booking details in the saved record
+      if (!session.leadSaved) {
+        await processAndSaveCompletedLead(remoteJid, session);
+      } else {
+        await updateLeadBookingDetails(session);
+      }
     }
   } else {
     // If they just provided the email and did not provide a parseable date/time in the same message, ask for the date/time now!
@@ -493,6 +512,8 @@ async function processAndSaveCompletedLead(remoteJid: string, session: Session) 
     scoreReason: scoreResult.reason,
     summaryBlock: scoreResult.summary,
     meetingTime: session.leadData.meetingTime,
+    meetingStartIso: session.leadData.meetingStartIso,
+    meetingEndIso: session.leadData.meetingEndIso,
     meetingLink: session.leadData.meetingLink
   });
 
@@ -520,6 +541,8 @@ async function updateLeadBookingDetails(session: Session) {
     scoreReason: session.leadData.scoreReason || 'N/A',
     summaryBlock: session.leadData.summaryBlock || 'N/A',
     meetingTime: session.leadData.meetingTime,
+    meetingStartIso: session.leadData.meetingStartIso,
+    meetingEndIso: session.leadData.meetingEndIso,
     meetingLink: session.leadData.meetingLink
   });
 
@@ -541,6 +564,8 @@ function updateLeadInFile(leadData: LeadData) {
     for (let i = leads.length - 1; i >= 0; i--) {
       if (leads[i].phone === leadData.phone) {
         leads[i].meetingTime = leadData.meetingTime;
+        leads[i].meetingStartIso = leadData.meetingStartIso;
+        leads[i].meetingEndIso = leadData.meetingEndIso;
         leads[i].meetingLink = leadData.meetingLink;
         break;
       }
@@ -552,9 +577,15 @@ function updateLeadInFile(leadData: LeadData) {
     console.error('Error updating leads.json:', error);
   }
 
-  // Update in MongoDB
-  if (leadData.meetingTime && leadData.meetingLink) {
-    updateLeadBooking(leadData.phone, leadData.meetingTime, leadData.meetingLink).catch(err => {
+  // Update in MongoDB (even if meetingLink is missing due to calendar API fallback)
+  if (leadData.meetingTime) {
+    updateLeadBooking(
+      leadData.phone,
+      leadData.meetingTime,
+      leadData.meetingLink || '',
+      leadData.meetingStartIso,
+      leadData.meetingEndIso
+    ).catch(err => {
       console.error('[DB-LEADS] Failed to update lead booking in MongoDB:', err.message || err);
     });
   }
@@ -730,6 +761,8 @@ async function handleSessionTimeout(remoteJid: string) {
         scoreReason: result.reason,
         summaryBlock: result.summary,
         meetingTime: session.leadData.meetingTime,
+        meetingStartIso: session.leadData.meetingStartIso,
+        meetingEndIso: session.leadData.meetingEndIso,
         meetingLink: session.leadData.meetingLink
       });
 
@@ -767,6 +800,8 @@ function saveLeadToFile(leadData: LeadData) {
     teamSize: leadData.teamSize,
     email: leadData.email,
     meetingTime: leadData.meetingTime,
+    meetingStartIso: leadData.meetingStartIso,
+    meetingEndIso: leadData.meetingEndIso,
     meetingLink: leadData.meetingLink,
     score: leadData.score,
     scoreReason: leadData.scoreReason,

@@ -62,6 +62,8 @@ export async function saveLead(leadData: any) {
       teamSize: leadData.teamSize || '',
       email: leadData.email || '',
       meetingTime: leadData.meetingTime || '',
+      meetingStartIso: leadData.meetingStartIso || '',
+      meetingEndIso: leadData.meetingEndIso || '',
       meetingLink: leadData.meetingLink || '',
       score: leadData.score || '',
       scoreReason: leadData.scoreReason || '',
@@ -81,7 +83,7 @@ export async function saveLead(leadData: any) {
 /**
  * Updates the booking details for the latest lead of a given phone number.
  */
-export async function updateLeadBooking(phone: string, meetingTime: string, meetingLink: string) {
+export async function updateLeadBooking(phone: string, meetingTime: string, meetingLink: string, meetingStartIso?: string, meetingEndIso?: string) {
   try {
     const database = getDb();
     const collection = database.collection('leads');
@@ -93,9 +95,13 @@ export async function updateLeadBooking(phone: string, meetingTime: string, meet
     );
     
     if (latestLead) {
+      const updateDoc: any = { meetingTime, meetingLink };
+      if (meetingStartIso) updateDoc.meetingStartIso = meetingStartIso;
+      if (meetingEndIso) updateDoc.meetingEndIso = meetingEndIso;
+
       const result = await collection.updateOne(
         { _id: latestLead._id },
-        { $set: { meetingTime, meetingLink } }
+        { $set: updateDoc }
       );
       console.log(`[DB-LEADS] Updated booking for lead ID ${latestLead._id}: ${meetingTime}`);
       return result;
