@@ -1,11 +1,11 @@
-import { WASocket } from '@whiskeysockets/baileys';
+import { sendWhatsAppReply } from './services/whatsapp';
 import * as fs from 'fs';
 import * as path from 'path';
 import * as dotenv from 'dotenv';
 import { askGemini, askGeminiRaw, GeminiMessage } from './gemini';
 import { createCalendarEvent } from './services/calendar';
 import { sendLeadEmails } from './services/mailer';
-import { saveLead } from './services/db';
+import { saveLead, updateLeadBooking } from './services/db';
 
 // Initialize dotenv immediately
 dotenv.config();
@@ -127,23 +127,27 @@ Do NOT add any other text before or after [TRIGGER_BOOKING]. Just the token alon
 - Keep messages concise and punchy for WhatsApp (not too long).
 - Use *bold* for emphasis. Use bullet points when helpful.
 - Be warm, professional, and consultative.
-- Send only ONE response per turn. Never send multiple messages.`;
+- Send only ONE response per turn. Never send multiple messages.
+- Always use the WhatsApp buttons protocol "[BUTTONS: Option 1 | Option 2 | Option 3]" when asking options or suggesting the next step (like business type B2B/B2C, team size 1-5/6-20/21+, or booking). Make sure button titles are strictly 20 characters or less.`;
 }
 
 /**
  * Main message handler — fully AI-driven
  */
-export async function handleIncomingMessage(sock: WASocket, remoteJid: string, senderNumber: string, messageText: string) {
-  // 1. Strict Whitelist Filter
-  const allowedString = process.env.ALLOWED_NUMBERS || '';
-  const allowedNumbers = allowedString.split(',').map(n => n.trim());
+export async function handleIncomingMessage(senderNumber: string, messageText: string) {
+  const remoteJid = senderNumber;
 
-  if (!allowedNumbers.includes(senderNumber)) {
-    console.log(`[WHITELIST-BLOCKED] Ignored message from ${senderNumber}: "${messageText}" (Allowed: ${allowedString})`);
-    return;
+  // 1. Strict Whitelist Filter (Bypassed if ALLOWED_NUMBERS is empty or '*')
+  const allowedString = process.env.ALLOWED_NUMBERS || '';
+  if (allowedString && allowedString.trim() !== '*') {
+    const allowedNumbers = allowedString.split(',').map(n => n.trim());
+    if (!allowedNumbers.includes(senderNumber)) {
+      console.log(`[WHITELIST-BLOCKED] Ignored message from ${senderNumber}: "${messageText}" (Allowed: ${allowedString})`);
+      return;
+    }
   }
 
-  console.log(`[MESSAGE-RECEIVED] From: ${senderNumber} | JID: ${remoteJid} | Message: "${messageText}"`);
+  console.log(`[MESSAGE-RECEIVED] From: ${senderNumber} | Message: "${messageText}"`);
 
   const text = messageText.trim();
   const lowerText = text.toLowerCase();
@@ -189,17 +193,17 @@ export async function handleIncomingMessage(sock: WASocket, remoteJid: string, s
     }
 
     // Refresh the 15-minute inactivity timer
-    refreshSessionTimeout(sock, remoteJid);
+    refreshSessionTimeout(remoteJid);
 
     // Handle based on phase
     switch (session.phase) {
       case 'qualifying':
       case 'chatting':
-        await handleAIConversation(sock, remoteJid, session, text, isNewSession);
+        await handleAIConversation(remoteJid, session, text, isNewSession);
         break;
 
       case 'booking':
-        await handleBookingResponse(sock, remoteJid, session, text);
+        await handleBookingResponse(remoteJid, session, text);
         break;
     }
   } finally {
@@ -210,9 +214,7 @@ export async function handleIncomingMessage(sock: WASocket, remoteJid: string, s
 /**
  * Core AI conversation handler — used for both qualification and free chat
  */
-async function handleAIConversation(sock: WASocket, remoteJid: string, session: Session, userText: string, isFirstMessage: boolean) {
-  await sock.sendPresenceUpdate('composing', remoteJid);
-
+async function handleAIConversation(remoteJid: string, session: Session, userText: string, isFirstMessage: boolean) {
   // Build the appropriate system prompt
   const systemPrompt = session.phase === 'qualifying'
     ? buildQualificationSystemPrompt(session.collectedFields)
@@ -238,7 +240,7 @@ async function handleAIConversation(sock: WASocket, remoteJid: string, session: 
       session.pendingBookingTime = userText;
     }
 
-    await initiateBookingFlow(sock, remoteJid, session);
+    await initiateBookingFlow(remoteJid, session);
     return;
   }
 
@@ -254,7 +256,7 @@ async function handleAIConversation(sock: WASocket, remoteJid: string, session: 
   session.history.push({ role: 'model', parts: [{ text: cleanResponse }] });
 
   // Send the AI response
-  await sock.sendMessage(remoteJid, { text: cleanResponse });
+  await sendWhatsAppReply(remoteJid, cleanResponse);
 
   // Background: extract any new qualification data from conversation
   if (session.phase === 'qualifying') {
@@ -264,7 +266,7 @@ async function handleAIConversation(sock: WASocket, remoteJid: string, session: 
     const allCollected = REQUIRED_FIELDS.every(f => session.collectedFields.has(f));
     if (allCollected && !session.leadSaved) {
       console.log(`[QUALIFICATION-COMPLETE] All fields collected for ${session.leadData.phone}`);
-      await processAndSaveCompletedLead(sock, remoteJid, session);
+      await processAndSaveCompletedLead(remoteJid, session);
     }
   }
 }
@@ -338,14 +340,13 @@ RULES:
 /**
  * Handle the booking date/time response
  */
-async function handleBookingResponse(sock: WASocket, remoteJid: string, session: Session, userText: string) {
+async function handleBookingResponse(remoteJid: string, session: Session, userText: string) {
   const lowerText = userText.toLowerCase();
 
   if (lowerText === 'skip' || lowerText === 'later' || lowerText === 'no') {
     console.log(`[BOOKING] User skipped calendar booking.`);
     session.phase = 'chatting';
     
-    await sock.sendPresenceUpdate('composing', remoteJid);
     const skipResponse = await askGemini(
       "The user decided to skip booking a call for now. Acknowledge this gracefully, let them know the team will follow up via email, and invite them to continue chatting or ask any questions.",
       session.history,
@@ -354,20 +355,21 @@ async function handleBookingResponse(sock: WASocket, remoteJid: string, session:
     const cleanSkip = stripTriggerTokens(skipResponse);
     session.history.push({ role: 'user', parts: [{ text: userText }] });
     session.history.push({ role: 'model', parts: [{ text: cleanSkip }] });
-    await sock.sendMessage(remoteJid, { text: cleanSkip });
+    await sendWhatsAppReply(remoteJid, cleanSkip);
     return;
   }
 
   // Extract email from this message if present
   const emailInMessage = extractEmailFromText(userText);
+  let justProvidedEmail = false;
   if (emailInMessage && !session.leadData.email) {
     session.leadData.email = emailInMessage;
     session.collectedFields.add('email');
     console.log(`[BOOKING-EMAIL] Email captured: ${emailInMessage}`);
+    justProvidedEmail = true;
   }
 
   // Try to parse the meeting time
-  await sock.sendPresenceUpdate('composing', remoteJid);
   const parsedTime = await parseMeetingTimeWithGemini(userText);
 
   if (parsedTime && parsedTime.start && parsedTime.end) {
@@ -386,38 +388,49 @@ async function handleBookingResponse(sock: WASocket, remoteJid: string, session:
       session.leadData.meetingTime = parsedTime.readable;
       session.leadData.meetingLink = eventLink || undefined;
 
-      const confirmMsg = `📅 *Meeting Confirmed!*\n\nYour strategy call has been scheduled for *${parsedTime.readable}* (IST).\n${session.leadData.email ? `A Google Calendar invitation has been sent to *${session.leadData.email}*.` : ''}\n${eventLink ? `\n🔗 Event Link: ${eventLink}` : ''}\n\nIs there anything else I can help you with?`;
+      const confirmMsg = `📅 *Meeting Confirmed!*\n\nYour strategy call has been scheduled for *${parsedTime.readable}* (IST).\n${session.leadData.email ? `A Google Calendar invitation has been sent to *${session.leadData.email}*.` : ''}\n${eventLink ? `\n🔗 Event Link: ${eventLink}` : ''}\n\nIs there anything else I can help you with? [BUTTONS: Explore Services | Ask Q&A | Finish]`;
 
       session.history.push({ role: 'user', parts: [{ text: userText }] });
       session.history.push({ role: 'model', parts: [{ text: confirmMsg }] });
-      await sock.sendMessage(remoteJid, { text: confirmMsg });
+      await sendWhatsAppReply(remoteJid, confirmMsg);
       session.phase = 'chatting';
 
-      // Save lead if not already saved
+      // Save lead if not already saved, otherwise update the booking details in the saved record
       if (!session.leadSaved) {
-        await processAndSaveCompletedLead(sock, remoteJid, session);
+        await processAndSaveCompletedLead(remoteJid, session);
+      } else {
+        await updateLeadBookingDetails(session);
       }
     } catch (err: any) {
       console.error('[MEETING-SCHEDULER] Google Calendar event creation failed:', err.message || err);
-      const errorMsg = `⚠️ I had trouble creating the Google Calendar event, but I've noted your preference for *${parsedTime.readable}* (IST). Our team will send you a calendar invitation via email shortly.\n\nIs there anything else I can help you with?`;
+      const errorMsg = `⚠️ I had trouble creating the Google Calendar event, but I've noted your preference for *${parsedTime.readable}* (IST). Our team will send you a calendar invitation via email shortly.\n\nIs there anything else I can help you with? [BUTTONS: Explore Services | Ask Q&A | Finish]`;
       session.history.push({ role: 'user', parts: [{ text: userText }] });
       session.history.push({ role: 'model', parts: [{ text: errorMsg }] });
-      await sock.sendMessage(remoteJid, { text: errorMsg });
+      await sendWhatsAppReply(remoteJid, errorMsg);
       session.phase = 'chatting';
     }
   } else {
+    // If they just provided the email and did not provide a parseable date/time in the same message, ask for the date/time now!
+    if (justProvidedEmail) {
+      const askTimeMsg = `Thank you! I've saved your email. 📅 *Please reply with your preferred date and time* for our strategy call.\n\nExamples:\n• *June 11 at 3 PM*\n• *Tomorrow at 11 AM*\n• *Friday at 2:30 PM*\n\nOr type *skip* to schedule later. [BUTTONS: Tomorrow 11 AM | Friday 2:30 PM | Skip for now]`;
+      session.history.push({ role: 'user', parts: [{ text: userText }] });
+      session.history.push({ role: 'model', parts: [{ text: askTimeMsg }] });
+      await sendWhatsAppReply(remoteJid, askTimeMsg);
+      return;
+    }
+
     // Couldn't parse — ask again with a clear message
-    const retryMsg = `I couldn't quite parse that date and time. Could you try a clearer format?\n\nExamples:\n• *June 11 at 3 PM*\n• *Tomorrow at 11 AM*\n• *Friday at 2:30 PM*\n\nOr type *skip* to schedule later.`;
+    const retryMsg = `I couldn't quite parse that date and time. Could you try a clearer format?\n\nExamples:\n• *June 11 at 3 PM*\n• *Tomorrow at 11 AM*\n• *Friday at 2:30 PM*\n\nOr type *skip* to schedule later. [BUTTONS: Tomorrow 11 AM | Friday 2:30 PM | Skip for now]`;
     session.history.push({ role: 'user', parts: [{ text: userText }] });
     session.history.push({ role: 'model', parts: [{ text: retryMsg }] });
-    await sock.sendMessage(remoteJid, { text: retryMsg });
+    await sendWhatsAppReply(remoteJid, retryMsg);
   }
 }
 
 /**
  * Triggers the booking flow — handles the case where user already provided time + email in one message
  */
-async function initiateBookingFlow(sock: WASocket, remoteJid: string, session: Session) {
+async function initiateBookingFlow(remoteJid: string, session: Session) {
   session.phase = 'booking';
 
   // If we already have email AND a pending booking time (user gave both in one message), fast-track!
@@ -425,39 +438,37 @@ async function initiateBookingFlow(sock: WASocket, remoteJid: string, session: S
     const pendingTime = session.pendingBookingTime;
     session.pendingBookingTime = undefined;
     console.log(`[FAST-TRACK-BOOKING] Email: ${session.leadData.email}, Time text: "${pendingTime}"`);
-    await handleBookingResponse(sock, remoteJid, session, pendingTime);
+    await handleBookingResponse(remoteJid, session, pendingTime);
     return;
   }
 
   // If we don't have email yet, ask for it
   if (!session.leadData.email) {
-    const emailMsg = `To send you the calendar invitation and a summary, I'll need your email address. What's the best email to reach you at?`;
+    const emailMsg = `To send you the calendar invitation and a summary, I'll need your email address. What's the best email to reach you at? [BUTTONS: Skip for now | Explore Services | Ask Q&A]`;
     session.history.push({ role: 'model', parts: [{ text: emailMsg }] });
-    await sock.sendMessage(remoteJid, { text: emailMsg });
+    await sendWhatsAppReply(remoteJid, emailMsg);
     // Stay in 'booking' phase — next message will be processed as booking response where we extract email + time
     return;
   }
 
   // We have email but need a time
-  await sock.sendPresenceUpdate('composing', remoteJid);
-
   // If there's a pending time from the trigger message, use it
   if (session.pendingBookingTime) {
     const pendingTime = session.pendingBookingTime;
     session.pendingBookingTime = undefined;
-    await handleBookingResponse(sock, remoteJid, session, pendingTime);
+    await handleBookingResponse(remoteJid, session, pendingTime);
     return;
   }
 
-  const bookingMsg = `📅 *Let's book your strategy call!*\n\nPlease reply with your preferred date and time.\n\nExamples:\n• *June 11 at 3 PM*\n• *Tomorrow at 11 AM*\n• *Friday at 2:30 PM*\n\nOr type *skip* to schedule later.`;
+  const bookingMsg = `📅 *Let's book your strategy call!*\n\nPlease reply with your preferred date and time.\n\nExamples:\n• *June 11 at 3 PM*\n• *Tomorrow at 11 AM*\n• *Friday at 2:30 PM*\n\nOr type *skip* to schedule later. [BUTTONS: Tomorrow 11 AM | Friday 2:30 PM | Skip for now]`;
   session.history.push({ role: 'model', parts: [{ text: bookingMsg }] });
-  await sock.sendMessage(remoteJid, { text: bookingMsg });
+  await sendWhatsAppReply(remoteJid, bookingMsg);
 }
 
 /**
  * Handle lead scoring, saving, and email notifications
  */
-async function processAndSaveCompletedLead(sock: WASocket, remoteJid: string, session: Session) {
+async function processAndSaveCompletedLead(remoteJid: string, session: Session) {
   if (session.leadSaved) return;
   session.leadSaved = true;
 
@@ -488,6 +499,65 @@ async function processAndSaveCompletedLead(sock: WASocket, remoteJid: string, se
   // Transition to chatting phase
   session.phase = 'chatting';
   console.log(`[LEAD-COMPLETE] Lead processed and saved for ${session.leadData.phone}. Score: ${scoreResult.score}`);
+}
+
+/**
+ * Updates an already saved lead with booking details, saves it, and sends confirmation emails.
+ */
+async function updateLeadBookingDetails(session: Session) {
+  // Update in local file and MongoDB
+  updateLeadInFile(session.leadData);
+
+  // Send booking confirmation emails
+  await sendLeadEmails({
+    phone: session.leadData.phone,
+    bizType: session.leadData.bizType || '',
+    challenge: session.leadData.challenge || '',
+    process: session.leadData.process || '',
+    teamSize: session.leadData.teamSize || '',
+    email: session.leadData.email || '',
+    score: session.leadData.score || '5/10',
+    scoreReason: session.leadData.scoreReason || 'N/A',
+    summaryBlock: session.leadData.summaryBlock || 'N/A',
+    meetingTime: session.leadData.meetingTime,
+    meetingLink: session.leadData.meetingLink
+  });
+
+  console.log(`[BOOKING-UPDATED] Lead booking updated and confirmation emails sent for ${session.leadData.phone}`);
+}
+
+/**
+ * Update the booking details of a lead in leads.json and MongoDB.
+ */
+function updateLeadInFile(leadData: LeadData) {
+  const filePath = path.join(__dirname, '../leads.json');
+  if (!fs.existsSync(filePath)) return;
+
+  try {
+    const fileData = fs.readFileSync(filePath, 'utf8');
+    const leads = JSON.parse(fileData);
+    
+    // Find the last record with this phone number and update booking
+    for (let i = leads.length - 1; i >= 0; i--) {
+      if (leads[i].phone === leadData.phone) {
+        leads[i].meetingTime = leadData.meetingTime;
+        leads[i].meetingLink = leadData.meetingLink;
+        break;
+      }
+    }
+    
+    fs.writeFileSync(filePath, JSON.stringify(leads, null, 2), 'utf8');
+    console.log(`[LEAD-UPDATED] Lead file updated with booking for ${leadData.phone}`);
+  } catch (error) {
+    console.error('Error updating leads.json:', error);
+  }
+
+  // Update in MongoDB
+  if (leadData.meetingTime && leadData.meetingLink) {
+    updateLeadBooking(leadData.phone, leadData.meetingTime, leadData.meetingLink).catch(err => {
+      console.error('[DB-LEADS] Failed to update lead booking in MongoDB:', err.message || err);
+    });
+  }
 }
 
 /**
@@ -613,7 +683,7 @@ Output ONLY JSON:
 /**
  * Refresh the 15-minute inactivity timer
  */
-function refreshSessionTimeout(sock: WASocket, remoteJid: string) {
+function refreshSessionTimeout(remoteJid: string) {
   const session = sessions[remoteJid];
   if (!session) return;
 
@@ -622,14 +692,14 @@ function refreshSessionTimeout(sock: WASocket, remoteJid: string) {
   }
 
   session.timeoutTimer = setTimeout(async () => {
-    await handleSessionTimeout(sock, remoteJid);
+    await handleSessionTimeout(remoteJid);
   }, 15 * 60 * 1000); // 15 minutes
 }
 
 /**
  * Handle 15-minute session timeout
  */
-async function handleSessionTimeout(sock: WASocket, remoteJid: string) {
+async function handleSessionTimeout(remoteJid: string) {
   const session = sessions[remoteJid];
   if (!session) return;
 
@@ -663,8 +733,8 @@ async function handleSessionTimeout(sock: WASocket, remoteJid: string) {
         meetingLink: session.leadData.meetingLink
       });
 
-      const timeoutMsg = "It's been a while, so I've saved the details you shared. Feel free to come back anytime to resume our conversation or book a call! 👋";
-      await sock.sendMessage(remoteJid, { text: timeoutMsg });
+      const timeoutMsg = "It's been a while, so I've saved the details you shared. Feel free to come back anytime to resume our conversation or book a call! 👋 [BUTTONS: Resume Chat | Book a Call | Main Menu]";
+      await sendWhatsAppReply(remoteJid, timeoutMsg);
     } catch (err) {
       console.error('Error compiling timeout lead:', err);
     }

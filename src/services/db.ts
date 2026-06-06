@@ -79,6 +79,35 @@ export async function saveLead(leadData: any) {
 }
 
 /**
+ * Updates the booking details for the latest lead of a given phone number.
+ */
+export async function updateLeadBooking(phone: string, meetingTime: string, meetingLink: string) {
+  try {
+    const database = getDb();
+    const collection = database.collection('leads');
+    
+    // Find the latest lead document for this phone number
+    const latestLead = await collection.findOne(
+      { phone },
+      { sort: { timestamp: -1 } }
+    );
+    
+    if (latestLead) {
+      const result = await collection.updateOne(
+        { _id: latestLead._id },
+        { $set: { meetingTime, meetingLink } }
+      );
+      console.log(`[DB-LEADS] Updated booking for lead ID ${latestLead._id}: ${meetingTime}`);
+      return result;
+    } else {
+      console.warn(`[DB-LEADS] No lead found to update booking for phone: ${phone}`);
+    }
+  } catch (error) {
+    console.error('[DB-LEADS] Error updating lead booking in MongoDB:', error);
+  }
+}
+
+/**
  * Fetches all leads from the 'leads' collection sorted by newest first
  */
 export async function getLeads(): Promise<any[]> {
