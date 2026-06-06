@@ -131,7 +131,7 @@ Do NOT add any other text before or after [TRIGGER_BOOKING]. Just the token alon
 - Use *bold* for emphasis. Use bullet points when helpful.
 - Be warm, professional, and consultative.
 - Send only ONE response per turn. Never send multiple messages.
-- Always use the WhatsApp buttons protocol "[BUTTONS: Option 1 | Option 2 | Option 3]" when asking options or suggesting the next step (like business type B2B/B2C, team size 1-5/6-20/21+, or booking). Make sure button titles are strictly 20 characters or less.`;
+- Always use the WhatsApp buttons protocol "[BUTTONS: Option 1 | Option 2 | Option 3]" when asking options or suggesting the next step (like business type B2B/B2C, team size 1-5/6-20/21+, or booking). Make sure button titles are strictly 20 characters or less. Do NOT use buttons for open-ended questions where the user needs to type custom text (like describing their current process/workflow, or typing their email address). Let them type their response freely.`;
 }
 
 /**
