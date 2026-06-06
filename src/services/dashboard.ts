@@ -270,23 +270,29 @@ function getDashboardHTML(): string {
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>GoRan AI — Live Lead Dashboard</title>
+  <title>GoRan AI — Premium Leads Hub</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Outfit:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&family=Outfit:wght@500;600;700;800;900&display=swap" rel="stylesheet">
   <style>
     :root {
-      --bg: #090d16;
-      --card-bg: rgba(17, 24, 39, 0.7);
-      --border: rgba(255, 255, 255, 0.08);
+      --bg: #070a13;
+      --card-bg: rgba(13, 20, 38, 0.45);
+      --card-hover: rgba(17, 27, 51, 0.6);
+      --border: rgba(255, 255, 255, 0.04);
+      --border-hover: rgba(234, 179, 8, 0.25);
       --accent: #F6C744;
-      --text: #f3f4f6;
-      --text-muted: #9ca3af;
+      --accent-gradient: linear-gradient(135deg, #F6C744 0%, #facc15 100%);
+      --text: #f1f5f9;
+      --text-muted: #64748b;
       --success: #10b981;
-      --success-glow: rgba(16, 185, 129, 0.15);
+      --success-glow: rgba(16, 185, 129, 0.12);
       --warning: #f59e0b;
-      --warning-glow: rgba(245, 158, 11, 0.15);
+      --warning-glow: rgba(245, 158, 11, 0.12);
+      --cyan: #06b6d4;
+      --cyan-glow: rgba(6, 182, 212, 0.12);
       --danger: #ef4444;
+      --danger-glow: rgba(239, 68, 68, 0.15);
     }
 
     * {
@@ -295,20 +301,37 @@ function getDashboardHTML(): string {
       padding: 0;
     }
 
+    /* Custom Scrollbar */
+    ::-webkit-scrollbar {
+      width: 8px;
+      height: 8px;
+    }
+    ::-webkit-scrollbar-track {
+      background: var(--bg);
+    }
+    ::-webkit-scrollbar-thumb {
+      background: rgba(255, 255, 255, 0.1);
+      border-radius: 100px;
+    }
+    ::-webkit-scrollbar-thumb:hover {
+      background: rgba(255, 255, 255, 0.2);
+    }
+
     body {
-      font-family: 'Inter', sans-serif;
+      font-family: 'Plus Jakarta Sans', sans-serif;
       background-color: var(--bg);
       background-image: 
-        radial-gradient(circle at 10% 20%, rgba(246, 199, 68, 0.05) 0%, transparent 40%),
-        radial-gradient(circle at 90% 80%, rgba(16, 185, 129, 0.03) 0%, transparent 40%);
+        radial-gradient(circle at 15% 15%, rgba(246, 199, 68, 0.08) 0%, transparent 45%),
+        radial-gradient(circle at 85% 85%, rgba(6, 182, 212, 0.06) 0%, transparent 45%);
       background-attachment: fixed;
       color: var(--text);
       min-height: 100vh;
       padding: 40px 20px;
+      overflow-x: hidden;
     }
 
     .container {
-      max-width: 1200px;
+      max-width: 1240px;
       margin: 0 auto;
     }
 
@@ -319,36 +342,38 @@ function getDashboardHTML(): string {
       align-items: center;
       margin-bottom: 40px;
       border-bottom: 1px solid var(--border);
-      padding-bottom: 20px;
+      padding-bottom: 24px;
     }
 
     .logo-section h1 {
       font-family: 'Outfit', sans-serif;
-      font-size: 28px;
+      font-size: 30px;
       font-weight: 800;
       letter-spacing: -0.5px;
-      background: linear-gradient(135deg, #fff 0%, var(--accent) 100%);
+      background: linear-gradient(135deg, #ffffff 30%, var(--accent) 100%);
       -webkit-background-clip: text;
       -webkit-text-fill-color: transparent;
     }
 
     .logo-section p {
-      font-size: 13px;
+      font-size: 14px;
       color: var(--text-muted);
       margin-top: 4px;
+      font-weight: 500;
     }
 
     .status-badge {
       display: flex;
       align-items: center;
-      gap: 8px;
-      background: rgba(16, 185, 129, 0.1);
-      border: 1px solid rgba(16, 185, 129, 0.2);
-      padding: 6px 14px;
+      gap: 10px;
+      background: rgba(16, 185, 129, 0.06);
+      border: 1px solid rgba(16, 185, 129, 0.15);
+      padding: 8px 16px;
       border-radius: 100px;
       font-size: 13px;
-      font-weight: 500;
+      font-weight: 600;
       color: var(--success);
+      box-shadow: 0 4px 15px rgba(16, 185, 129, 0.05);
     }
 
     .status-dot {
@@ -369,159 +394,348 @@ function getDashboardHTML(): string {
     /* Stats Grid */
     .stats-grid {
       display: grid;
-      grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
-      gap: 20px;
+      grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+      gap: 24px;
       margin-bottom: 40px;
     }
 
     .stat-card {
       background: var(--card-bg);
-      backdrop-filter: blur(12px);
-      -webkit-backdrop-filter: blur(12px);
+      backdrop-filter: blur(20px);
+      -webkit-backdrop-filter: blur(20px);
       border: 1px solid var(--border);
-      border-radius: 16px;
+      border-radius: 20px;
       padding: 24px;
       transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+      position: relative;
+      overflow: hidden;
+    }
+
+    .stat-card::before {
+      content: '';
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      background: linear-gradient(180deg, rgba(255,255,255,0.02) 0%, transparent 100%);
+      pointer-events: none;
     }
 
     .stat-card:hover {
       transform: translateY(-2px);
-      border-color: rgba(246, 199, 68, 0.2);
-      box-shadow: 0 10px 20px rgba(0,0,0,0.2);
+      border-color: rgba(246, 199, 68, 0.15);
+      box-shadow: 0 10px 30px rgba(0, 0, 0, 0.3);
     }
 
     .stat-label {
       font-size: 13px;
-      font-weight: 500;
+      font-weight: 600;
       color: var(--text-muted);
       text-transform: uppercase;
-      letter-spacing: 0.5px;
+      letter-spacing: 1px;
     }
 
     .stat-value {
       font-family: 'Outfit', sans-serif;
-      font-size: 36px;
+      font-size: 42px;
       font-weight: 700;
       color: #fff;
       margin-top: 10px;
+      display: flex;
+      align-items: baseline;
+      gap: 8px;
     }
 
-    /* Leads Table Section */
-    .section-title {
-      font-family: 'Outfit', sans-serif;
-      font-size: 20px;
+    /* Filters Bar */
+    .controls-bar {
+      background: var(--card-bg);
+      backdrop-filter: blur(20px);
+      -webkit-backdrop-filter: blur(20px);
+      border: 1px solid var(--border);
+      border-radius: 20px;
+      padding: 16px 24px;
+      margin-bottom: 30px;
+      display: flex;
+      flex-wrap: wrap;
+      justify-content: space-between;
+      align-items: center;
+      gap: 20px;
+    }
+
+    .search-input-wrapper {
+      position: relative;
+      flex: 1;
+      min-width: 280px;
+      max-width: 400px;
+    }
+
+    .search-input-wrapper input {
+      width: 100%;
+      background: rgba(0, 0, 0, 0.2);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 12px 16px 12px 42px;
+      color: #fff;
+      font-size: 14px;
+      font-family: inherit;
+      transition: all 0.2s;
+    }
+
+    .search-input-wrapper input:focus {
+      outline: none;
+      border-color: rgba(246, 199, 68, 0.4);
+      background: rgba(0, 0, 0, 0.3);
+      box-shadow: 0 0 0 3px rgba(246, 199, 68, 0.05);
+    }
+
+    .search-icon {
+      position: absolute;
+      left: 14px;
+      top: 50%;
+      transform: translateY(-50%);
+      color: var(--text-muted);
+      font-size: 16px;
+      pointer-events: none;
+    }
+
+    .filter-tabs {
+      display: flex;
+      gap: 8px;
+      background: rgba(0, 0, 0, 0.2);
+      padding: 4px;
+      border-radius: 12px;
+      border: 1px solid var(--border);
+    }
+
+    .tab-btn {
+      background: none;
+      border: none;
+      color: var(--text-muted);
+      padding: 8px 16px;
+      font-size: 13px;
       font-weight: 600;
-      margin-bottom: 20px;
+      border-radius: 10px;
+      cursor: pointer;
+      transition: all 0.2s;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+
+    .tab-btn:hover {
+      color: #fff;
+    }
+
+    .tab-btn.active {
+      background: var(--accent);
+      color: #000;
+    }
+
+    .tab-count {
+      background: rgba(255, 255, 255, 0.1);
+      padding: 2px 6px;
+      border-radius: 6px;
+      font-size: 11px;
+    }
+    
+    .tab-btn.active .tab-count {
+      background: rgba(0, 0, 0, 0.15);
+    }
+
+    .sort-wrapper {
       display: flex;
       align-items: center;
       gap: 10px;
     }
 
-    .leads-list {
+    .sort-wrapper span {
+      font-size: 13px;
+      color: var(--text-muted);
+      font-weight: 500;
+    }
+
+    .sort-select {
+      background: rgba(0, 0, 0, 0.2);
+      border: 1px solid var(--border);
+      color: #fff;
+      padding: 8px 12px;
+      border-radius: 10px;
+      font-size: 13px;
+      font-family: inherit;
+      cursor: pointer;
+      outline: none;
+      transition: border-color 0.2s;
+    }
+
+    .sort-select:focus {
+      border-color: rgba(246, 199, 68, 0.4);
+    }
+
+    /* Leads Grid */
+    .section-title {
+      font-family: 'Outfit', sans-serif;
+      font-size: 22px;
+      font-weight: 700;
+      margin-bottom: 24px;
       display: flex;
-      flex-direction: column;
-      gap: 16px;
+      align-items: center;
+      gap: 12px;
+      letter-spacing: -0.5px;
+    }
+
+    .leads-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(360px, 1fr));
+      gap: 24px;
     }
 
     .lead-card {
       background: var(--card-bg);
-      backdrop-filter: blur(12px);
-      -webkit-backdrop-filter: blur(12px);
+      backdrop-filter: blur(20px);
+      -webkit-backdrop-filter: blur(20px);
       border: 1px solid var(--border);
-      border-radius: 16px;
-      padding: 20px;
+      border-radius: 20px;
+      padding: 24px;
       display: flex;
+      flex-direction: column;
       justify-content: space-between;
-      align-items: center;
-      transition: all 0.3s ease;
+      transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
       cursor: pointer;
+      position: relative;
     }
 
     .lead-card:hover {
-      border-color: rgba(255, 255, 255, 0.15);
-      background: rgba(17, 24, 39, 0.85);
+      transform: translateY(-4px);
+      border-color: var(--border-hover);
+      box-shadow: 0 12px 30px rgba(0, 0, 0, 0.35);
+      background: var(--card-hover);
     }
 
-    .lead-main {
+    .lead-top {
       display: flex;
-      flex-direction: column;
-      gap: 6px;
-      max-width: 70%;
-    }
-
-    .lead-header {
-      display: flex;
-      align-items: center;
-      gap: 12px;
+      justify-content: space-between;
+      align-items: flex-start;
+      margin-bottom: 16px;
     }
 
     .lead-phone {
-      font-weight: 600;
-      font-size: 16px;
+      font-family: 'Outfit', sans-serif;
+      font-weight: 700;
+      font-size: 17px;
       color: #fff;
+      display: flex;
+      align-items: center;
+      gap: 6px;
     }
 
     .lead-time {
-      font-size: 12px;
+      font-size: 11px;
       color: var(--text-muted);
+      font-weight: 500;
     }
 
     .lead-email {
-      font-size: 14px;
+      font-size: 13px;
       color: var(--accent);
       text-decoration: none;
+      margin-bottom: 16px;
+      display: block;
+      font-weight: 600;
+      word-break: break-all;
     }
 
-    .lead-details {
+    .lead-body {
+      background: rgba(0, 0, 0, 0.15);
+      border-radius: 12px;
+      padding: 14px;
+      border: 1px solid rgba(255, 255, 255, 0.02);
+      margin-bottom: 18px;
+      flex-grow: 1;
+    }
+
+    .lead-body-item {
       font-size: 13px;
+      margin-bottom: 8px;
+      line-height: 1.5;
+    }
+
+    .lead-body-item:last-child {
+      margin-bottom: 0;
+    }
+
+    .lead-body-item strong {
       color: var(--text-muted);
-      line-height: 1.4;
-      margin-top: 4px;
+      font-weight: 600;
+      margin-right: 4px;
+    }
+
+    .lead-body-item span {
+      color: var(--text);
+    }
+
+    .lead-footer {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      border-top: 1px solid rgba(255, 255, 255, 0.05);
+      padding-top: 16px;
     }
 
     .lead-badges {
       display: flex;
-      align-items: center;
-      gap: 12px;
+      flex-wrap: wrap;
+      gap: 8px;
     }
 
     .badge {
       padding: 6px 12px;
-      border-radius: 8px;
+      border-radius: 10px;
       font-size: 12px;
-      font-weight: 600;
+      font-weight: 700;
       display: inline-flex;
       align-items: center;
       gap: 6px;
+      letter-spacing: 0.2px;
     }
 
     .badge-score-high {
       background: var(--success-glow);
       color: var(--success);
-      border: 1px solid rgba(16, 185, 129, 0.2);
+      border: 1px solid rgba(16, 185, 129, 0.15);
     }
 
     .badge-score-med {
       background: var(--warning-glow);
       color: var(--warning);
-      border: 1px solid rgba(245, 158, 11, 0.2);
+      border: 1px solid rgba(245, 158, 11, 0.15);
     }
 
     .badge-score-low {
-      background: rgba(255,255,255,0.03);
+      background: rgba(255, 255, 255, 0.03);
       color: var(--text-muted);
       border: 1px solid var(--border);
     }
 
     .badge-meeting {
-      background: rgba(246, 199, 68, 0.08);
+      background: var(--cyan-glow);
+      color: var(--cyan);
+      border: 1px solid rgba(6, 182, 212, 0.15);
+    }
+
+    .view-details-arrow {
       color: var(--accent);
-      border: 1px solid rgba(246, 199, 68, 0.2);
+      font-size: 16px;
+      transition: transform 0.2s;
+    }
+
+    .lead-card:hover .view-details-arrow {
+      transform: translateX(4px);
     }
 
     /* Whitelist Section */
     .whitelist-section {
-      margin-top: 50px;
+      margin-top: 60px;
     }
 
     .whitelist-container {
@@ -537,47 +751,55 @@ function getDashboardHTML(): string {
     }
 
     .whitelist-tag {
-      background: rgba(255, 255, 255, 0.05);
+      background: rgba(255, 255, 255, 0.03);
       border: 1px solid var(--border);
       padding: 8px 14px;
-      border-radius: 10px;
+      border-radius: 12px;
       display: flex;
       align-items: center;
       gap: 10px;
       font-size: 14px;
-      font-weight: 500;
+      font-weight: 600;
       color: #fff;
+      transition: border-color 0.2s;
+    }
+    
+    .whitelist-tag:hover {
+      border-color: rgba(239, 68, 68, 0.3);
     }
 
     .whitelist-tag .remove-btn {
       color: var(--danger);
       cursor: pointer;
-      font-weight: 700;
-      font-size: 16px;
+      font-weight: 800;
+      font-size: 15px;
       line-height: 1;
-      transition: opacity 0.2s;
+      padding: 2px;
+      border-radius: 4px;
+      transition: background 0.2s;
     }
 
     .whitelist-tag .remove-btn:hover {
-      opacity: 0.8;
+      background: var(--danger-glow);
     }
 
     .whitelist-add-form {
       display: flex;
-      gap: 10px;
+      gap: 12px;
       margin-top: 10px;
-      max-width: 450px;
+      max-width: 480px;
     }
 
     .whitelist-add-form input {
       flex: 1;
       background: rgba(0, 0, 0, 0.2);
       border: 1px solid var(--border);
-      border-radius: 10px;
-      padding: 10px 14px;
+      border-radius: 12px;
+      padding: 12px 16px;
       color: #fff;
       font-size: 14px;
       font-family: inherit;
+      transition: border-color 0.2s;
     }
 
     .whitelist-add-form input:focus {
@@ -586,30 +808,31 @@ function getDashboardHTML(): string {
     }
 
     .whitelist-add-form button {
-      background: var(--accent);
+      background: var(--accent-gradient);
       color: #000;
       border: none;
-      border-radius: 10px;
-      padding: 10px 20px;
+      border-radius: 12px;
+      padding: 12px 24px;
       font-size: 14px;
-      font-weight: 600;
+      font-weight: 700;
       cursor: pointer;
       transition: opacity 0.2s;
+      box-shadow: 0 4px 15px rgba(246, 199, 68, 0.2);
     }
 
     .whitelist-add-form button:hover {
       opacity: 0.9;
     }
 
-    /* Modal */
+    /* Modal / Drawer */
     .modal-overlay {
       position: fixed;
       top: 0;
       left: 0;
       right: 0;
       bottom: 0;
-      background: rgba(0,0,0,0.8);
-      backdrop-filter: blur(8px);
+      background: rgba(3, 7, 18, 0.85);
+      backdrop-filter: blur(12px);
       display: none;
       justify-content: center;
       align-items: center;
@@ -618,56 +841,211 @@ function getDashboardHTML(): string {
     }
 
     .modal {
-      background: #0f172a;
-      border: 1px solid rgba(255,255,255,0.1);
-      border-radius: 20px;
-      max-width: 600px;
+      background: #0d1222;
+      border: 1px solid rgba(255, 255, 255, 0.08);
+      border-radius: 24px;
+      max-width: 680px;
       width: 100%;
-      max-height: 85vh;
+      max-height: 90vh;
       overflow-y: auto;
-      padding: 30px;
+      padding: 36px;
       position: relative;
+      box-shadow: 0 20px 50px rgba(0,0,0,0.5);
     }
 
     .modal-close {
       position: absolute;
-      top: 20px;
-      right: 20px;
-      background: none;
-      border: none;
-      color: var(--text-muted);
-      font-size: 24px;
+      top: 24px;
+      right: 24px;
+      background: rgba(255,255,255,0.03);
+      border: 1px solid var(--border);
+      border-radius: 50%;
+      width: 36px;
+      height: 36px;
+      color: var(--text);
+      font-size: 18px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
       cursor: pointer;
+      transition: all 0.2s;
+    }
+
+    .modal-close:hover {
+      background: rgba(255,255,255,0.1);
+      transform: rotate(90deg);
+    }
+
+    .modal-title-section {
+      margin-bottom: 24px;
+      border-bottom: 1px solid var(--border);
+      padding-bottom: 20px;
     }
 
     .modal-title {
       font-family: 'Outfit', sans-serif;
-      font-size: 22px;
+      font-size: 24px;
+      font-weight: 700;
+      color: #fff;
+    }
+    
+    .modal-subtitle {
+      font-size: 13px;
+      color: var(--text-muted);
+      margin-top: 4px;
+    }
+
+    /* Score Meter */
+    .score-meter-wrapper {
+      display: flex;
+      align-items: center;
+      gap: 20px;
+      background: rgba(255, 255, 255, 0.02);
+      border: 1px solid var(--border);
+      border-radius: 16px;
+      padding: 20px;
+      margin-bottom: 24px;
+    }
+
+    .score-circle {
+      width: 70px;
+      height: 70px;
+      border-radius: 50%;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      font-family: 'Outfit', sans-serif;
+      font-weight: 800;
+      border: 4px solid var(--border);
+      position: relative;
+    }
+    
+    .score-circle.score-high {
+      border-color: var(--success);
+      color: var(--success);
+      background: var(--success-glow);
+    }
+    
+    .score-circle.score-med {
+      border-color: var(--warning);
+      color: var(--warning);
+      background: var(--warning-glow);
+    }
+    
+    .score-circle.score-low {
+      border-color: var(--text-muted);
+      color: var(--text-muted);
+      background: rgba(255,255,255,0.02);
+    }
+    
+    .score-circle-value {
+      font-size: 20px;
+      line-height: 1;
+    }
+    
+    .score-circle-label {
+      font-size: 9px;
+      text-transform: uppercase;
+      margin-top: 2px;
       font-weight: 600;
-      margin-bottom: 20px;
-      border-bottom: 1px solid var(--border);
-      padding-bottom: 15px;
+    }
+    
+    .score-reason-text {
+      flex: 1;
+      font-size: 14px;
+      line-height: 1.5;
+      color: var(--text);
+    }
+    
+    .score-reason-text em {
+      display: block;
+      font-style: normal;
+      font-size: 12px;
+      color: var(--text-muted);
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      margin-bottom: 4px;
+    }
+
+    .summary-title {
+      font-family: 'Outfit', sans-serif;
+      font-size: 16px;
+      font-weight: 600;
+      color: #fff;
+      margin-bottom: 12px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+
+    .copy-btn {
+      background: rgba(255, 255, 255, 0.05);
+      border: 1px solid var(--border);
+      color: var(--text);
+      padding: 6px 12px;
+      border-radius: 8px;
+      font-size: 11px;
+      font-weight: 700;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+
+    .copy-btn:hover {
+      background: rgba(255, 255, 255, 0.1);
       color: #fff;
     }
 
     .summary-block {
-      background: #020617;
-      color: #38bdf8;
-      font-family: monospace;
-      padding: 20px;
-      border-radius: 12px;
+      background: #030712;
+      color: var(--cyan);
+      font-family: 'SFMono-Regular', Consolas, 'Liberation Mono', Menlo, monospace;
+      padding: 24px;
+      border-radius: 16px;
       white-space: pre-wrap;
       font-size: 13px;
-      line-height: 1.5;
-      border: 1px solid rgba(56, 189, 248, 0.1);
+      line-height: 1.6;
+      border: 1px solid rgba(6, 182, 212, 0.08);
+      overflow-x: auto;
     }
 
     .empty-state {
+      grid-column: 1 / -1;
       text-align: center;
-      padding: 60px 20px;
+      padding: 80px 20px;
       color: var(--text-muted);
-      border: 1px dashed var(--border);
-      border-radius: 16px;
+      border: 2px dashed rgba(255,255,255,0.03);
+      border-radius: 20px;
+      background: rgba(255, 255, 255, 0.005);
+    }
+
+    .empty-state-icon {
+      font-size: 40px;
+      margin-bottom: 16px;
+      display: block;
+    }
+
+    .empty-state-title {
+      font-family: 'Outfit', sans-serif;
+      font-size: 18px;
+      font-weight: 600;
+      color: var(--text);
+      margin-bottom: 6px;
+    }
+
+    /* Modal Animation */
+    @keyframes slideIn {
+      from { transform: scale(0.95); opacity: 0; }
+      to { transform: scale(1); opacity: 1; }
+    }
+
+    .modal-overlay.active {
+      display: flex;
+    }
+
+    .modal-overlay.active .modal {
+      animation: slideIn 0.3s cubic-bezier(0.16, 1, 0.3, 1) forwards;
     }
   </style>
 </head>
@@ -676,11 +1054,11 @@ function getDashboardHTML(): string {
     <header>
       <div class="logo-section">
         <h1>GoRan AI</h1>
-        <p>Live Agency Lead & Booking Dashboard</p>
+        <p>Agency Operations & Lead Scoping Panel</p>
       </div>
       <div class="status-badge">
         <span class="status-dot"></span>
-        <span>WhatsApp Bot Active</span>
+        <span>Meta WhatsApp Bot Active</span>
       </div>
     </header>
 
@@ -699,42 +1077,97 @@ function getDashboardHTML(): string {
       </div>
     </div>
 
-    <div class="section-title">
-      <span>🔥</span> Recent Scoped Leads
+    <!-- Filter & Controls bar -->
+    <div class="controls-bar">
+      <div class="search-input-wrapper">
+        <span class="search-icon">🔍</span>
+        <input type="text" id="search-input" placeholder="Search by phone, email, challenge, or biz..." oninput="handleSearch()" />
+      </div>
+
+      <div class="filter-tabs">
+        <button class="tab-btn active" id="tab-all" onclick="setFilter('all')">
+          All Leads <span class="tab-count" id="count-all">0</span>
+        </button>
+        <button class="tab-btn" id="tab-high" onclick="setFilter('high')">
+          Qualified (8+) <span class="tab-count" id="count-high">0</span>
+        </button>
+        <button class="tab-btn" id="tab-meetings" onclick="setFilter('meetings')">
+          Meetings <span class="tab-count" id="count-meetings">0</span>
+        </button>
+      </div>
+
+      <div class="sort-wrapper">
+        <span>Sort By</span>
+        <select class="sort-select" id="sort-select" onchange="handleSort()">
+          <option value="newest">Newest First</option>
+          <option value="score_desc">Score: High to Low</option>
+          <option value="teamsize_desc">Team: Large to Small</option>
+        </select>
+      </div>
     </div>
 
-    <div class="leads-list" id="leads-list">
-      <div class="empty-state">No leads recorded yet. Scan QR and start qualification conversations!</div>
+    <div class="section-title">
+      <span>⚡</span> Real-time Lead Streams
+    </div>
+
+    <div class="leads-grid" id="leads-grid">
+      <div class="empty-state">
+        <span class="empty-state-icon">📡</span>
+        <div class="empty-state-title">Awaiting Qualified Leads</div>
+        <p>All conversations triggered on WhatsApp will populate here in real-time.</p>
+      </div>
     </div>
 
     <!-- Whitelisted Numbers Manager -->
     <div class="whitelist-section">
       <div class="section-title">
-        <span>🔒</span> Whitelisted Test Numbers
+        <span>🔒</span> Whitelist Sandbox Numbers
       </div>
       <div class="stat-card">
-        <p style="font-size: 13px; color: var(--text-muted); margin-bottom: 20px;">
-          Only the phone numbers listed below are allowed to chat with and trigger the bot. Make sure to enter the country code (e.g., 91 for India) without '+' or spaces.
+        <p style="font-size: 13px; color: var(--text-muted); margin-bottom: 24px; line-height: 1.6;">
+          If Whitelisting is active in environment settings, only the numbers listed below will trigger bot exchanges. Add numbers with country code (e.g., 91 for India) without '+' or spaces.
         </p>
         
         <div class="whitelist-container">
           <div class="whitelist-list" id="whitelist-list">
-            <span style="color: var(--text-muted); font-size: 13px;">Loading whitelist...</span>
+            <span style="color: var(--text-muted); font-size: 13px;">Loading sandbox numbers...</span>
           </div>
           
           <div class="whitelist-add-form">
             <input type="text" id="new-number-input" placeholder="e.g. 919934225353" maxlength="20" />
-            <button onclick="addNumber()">Add Number</button>
+            <button onclick="addNumber()">Add to Whitelist</button>
           </div>
         </div>
       </div>
     </div>
   </div>
 
-  <div class="modal-overlay" id="modal-overlay">
+  <div class="modal-overlay" id="modal-overlay" onclick="closeModalOnOverlay(event)">
     <div class="modal">
       <button class="modal-close" onclick="closeModal()">&times;</button>
-      <div class="modal-title">Lead Scoping Details</div>
+      
+      <div class="modal-title-section">
+        <div class="modal-title" id="modal-title">+91 99999 99999</div>
+        <div class="modal-subtitle" id="modal-subtitle">Lead Scoping Breakdown</div>
+      </div>
+
+      <!-- Score widget -->
+      <div class="score-meter-wrapper">
+        <div class="score-circle" id="modal-score-circle">
+          <span class="score-circle-value" id="modal-score-val">0/10</span>
+          <span class="score-circle-label">Score</span>
+        </div>
+        <div class="score-reason-text" id="modal-score-reason">
+          <em>Lead Qualification Rating</em>
+          Awaiting details...
+        </div>
+      </div>
+
+      <!-- Raw text summary -->
+      <div class="summary-title">
+        <span>AI Scoping Summary</span>
+        <button class="copy-btn" onclick="copySummaryText()">Copy Text</button>
+      </div>
       <pre class="summary-block" id="modal-summary-block"></pre>
     </div>
   </div>
@@ -742,16 +1175,19 @@ function getDashboardHTML(): string {
   <script>
     let activeLeads = [];
     let whitelist = [];
+    let currentFilter = 'all'; // 'all' | 'high' | 'meetings'
+    let currentSearch = '';
+    let currentSort = 'newest'; // 'newest' | 'score_desc' | 'teamsize_desc'
 
     async function fetchLeads() {
       try {
         const response = await fetch('/api/leads');
         const leads = await response.json();
         
-        // Only re-render if count or timestamp changed
+        // Refresh only if data changed
         if (JSON.stringify(leads) !== JSON.stringify(activeLeads)) {
           activeLeads = leads;
-          renderLeads(leads);
+          processAndRender();
         }
       } catch (err) {
         console.error('Error fetching leads:', err);
@@ -771,11 +1207,10 @@ function getDashboardHTML(): string {
     function renderWhitelist() {
       const container = document.getElementById('whitelist-list');
       if (whitelist.length === 0) {
-        container.innerHTML = '<span style="color: var(--text-muted); font-size: 13px;">No numbers whitelisted. Bot will ignore all incoming messages!</span>';
+        container.innerHTML = '<span style="color: var(--text-muted); font-size: 13px;">No numbers whitelisted. Bot will ignore sandbox messages.</span>';
         return;
       }
       
-      container.innerHTML = '';
       whitelist.forEach(num => {
         const tag = document.createElement('div');
         tag.className = 'whitelist-tag';
@@ -804,7 +1239,7 @@ function getDashboardHTML(): string {
         }
       } catch (err) {
         console.error('Error saving whitelist:', err);
-        alert('Server connection error while saving.');
+        alert('Server connection error.');
       }
     }
 
@@ -813,11 +1248,11 @@ function getDashboardHTML(): string {
       const val = input.value.trim();
       if (!val) return;
       if (!/^\\d+$/.test(val)) {
-        alert('Please enter numbers only (digits only, e.g., 919934225353)');
+        alert('Please enter digits only (e.g. 919934225353)');
         return;
       }
       if (whitelist.includes(val)) {
-        alert('This number is already whitelisted.');
+        alert('Number is already whitelisted.');
         return;
       }
       whitelist.push(val);
@@ -832,69 +1267,135 @@ function getDashboardHTML(): string {
       }
     }
 
-    function renderLeads(leads) {
-      // Sort: newest first
-      leads.sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
+    function handleSearch() {
+      currentSearch = document.getElementById('search-input').value.toLowerCase().trim();
+      processAndRender();
+    }
 
-      // Calculate stats
-      const total = leads.length;
-      let qualified = 0;
-      let meetings = 0;
+    function setFilter(filterType) {
+      document.querySelectorAll('.tab-btn').forEach(btn => btn.classList.remove('active'));
+      
+      if (filterType === 'all') document.getElementById('tab-all').classList.add('active');
+      if (filterType === 'high') document.getElementById('tab-high').classList.add('active');
+      if (filterType === 'meetings') document.getElementById('tab-meetings').classList.add('active');
+      
+      currentFilter = filterType;
+      processAndRender();
+    }
 
-      const listContainer = document.getElementById('leads-list');
-      if (total === 0) {
-        listContainer.innerHTML = '<div class="empty-state">No leads recorded yet. Scan QR and start qualification conversations!</div>';
+    function handleSort() {
+      currentSort = document.getElementById('sort-select').value;
+      processAndRender();
+    }
+
+    function processAndRender() {
+      let filtered = [...activeLeads];
+
+      // Update total badges before any filtering
+      const countAll = filtered.length;
+      const countHigh = filtered.filter(l => parseInt(l.score || '0') >= 8).length;
+      const countMeetings = filtered.filter(l => l.meetingTime).length;
+
+      document.getElementById('count-all').textContent = countAll;
+      document.getElementById('count-high').textContent = countHigh;
+      document.getElementById('count-meetings').textContent = countMeetings;
+
+      // 1. Apply Search
+      if (currentSearch) {
+        filtered = filtered.filter(lead => {
+          return (
+            (lead.phone && lead.phone.toLowerCase().includes(currentSearch)) ||
+            (lead.email && lead.email.toLowerCase().includes(currentSearch)) ||
+            (lead.bizType && lead.bizType.toLowerCase().includes(currentSearch)) ||
+            (lead.challenge && lead.challenge.toLowerCase().includes(currentSearch)) ||
+            (lead.process && lead.process.toLowerCase().includes(currentSearch))
+          );
+        });
+      }
+
+      // 2. Apply Tabs
+      if (currentFilter === 'high') {
+        filtered = filtered.filter(lead => parseInt(lead.score || '0') >= 8);
+      } else if (currentFilter === 'meetings') {
+        filtered = filtered.filter(lead => lead.meetingTime);
+      }
+
+      // 3. Apply Sorting
+      if (currentSort === 'newest') {
+        filtered.sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
+      } else if (currentSort === 'score_desc') {
+        filtered.sort((a, b) => {
+          const scoreA = parseInt(a.score || '0');
+          const scoreB = parseInt(b.score || '0');
+          return scoreB - scoreA;
+        });
+      } else if (currentSort === 'teamsize_desc') {
+        filtered.sort((a, b) => {
+          // Extract first digit group or set to 0
+          const getNum = str => {
+            const m = (str || '').match(/\\d+/);
+            return m ? parseInt(m[0]) : 0;
+          };
+          return getNum(b.teamSize) - getNum(a.teamSize);
+        });
+      }
+
+      renderLeadsGrid(filtered);
+      
+      // Update Stat Cards with global values
+      document.getElementById('stat-total').textContent = countAll;
+      document.getElementById('stat-qualified').textContent = countHigh;
+      document.getElementById('stat-meetings').textContent = countMeetings;
+    }
+
+    function renderLeadsGrid(leads) {
+      const gridContainer = document.getElementById('leads-grid');
+      
+      if (leads.length === 0) {
+        gridContainer.innerHTML = \`
+          <div class="empty-state">
+            <span class="empty-state-icon">📡</span>
+            <div class="empty-state-title">No leads match the filters</div>
+            <p>Try resetting the search terms or choosing another tab status.</p>
+          </div>
+        \`;
         return;
       }
 
-      listContainer.innerHTML = '';
+      gridContainer.innerHTML = '';
 
       leads.forEach(lead => {
         const scoreNum = parseInt(lead.score || '0');
-        if (scoreNum >= 8) qualified++;
-        if (lead.meetingTime) meetings++;
-
         let scoreClass = 'badge-score-low';
         if (scoreNum >= 8) scoreClass = 'badge-score-high';
         else if (scoreNum >= 5) scoreClass = 'badge-score-med';
 
         const card = document.createElement('div');
         card.className = 'lead-card';
-        card.onclick = () => showModal(lead.summaryBlock || 'No summary block generated.');
+        card.onclick = () => showModal(lead);
 
-        const mainDiv = document.createElement('div');
-        mainDiv.className = 'lead-main';
-
-        const headerDiv = document.createElement('div');
-        headerDiv.className = 'lead-header';
-        
-        const phoneSpan = document.createElement('span');
-        phoneSpan.className = 'lead-phone';
-        phoneSpan.textContent = '+' + lead.phone;
-
-        const timeSpan = document.createElement('span');
-        timeSpan.className = 'lead-time';
-        timeSpan.textContent = new Date(lead.timestamp).toLocaleString();
-
-        headerDiv.appendChild(phoneSpan);
-        headerDiv.appendChild(timeSpan);
-
-        const emailLink = document.createElement('div');
-        emailLink.className = 'lead-email';
-        emailLink.textContent = lead.email || 'No email provided';
-
-        const detailsDiv = document.createElement('div');
-        detailsDiv.className = 'lead-details';
-        detailsDiv.innerHTML = \`
-          <strong>Biz Type:</strong> \&nbsp;\${lead.bizType || 'N/A'}<br/>
-          <strong>Challenge:</strong> \&nbsp;\${lead.challenge || 'N/A'}<br/>
-          <strong>Workflow:</strong> \&nbsp;\${lead.process || 'N/A'}
+        const topDiv = document.createElement('div');
+        topDiv.className = 'lead-top';
+        topDiv.innerHTML = \`
+          <span class="lead-phone">📞 +\${lead.phone}</span>
+          <span class="lead-time">\${new Date(lead.timestamp).toLocaleDateString()} \${new Date(lead.timestamp).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}</span>
         \`;
 
-        mainDiv.appendChild(headerDiv);
-        mainDiv.appendChild(emailLink);
-        mainDiv.appendChild(detailsDiv);
+        const emailSpan = document.createElement('span');
+        emailSpan.className = 'lead-email';
+        emailSpan.textContent = lead.email || 'No email provided';
 
+        const bodyDiv = document.createElement('div');
+        bodyDiv.className = 'lead-body';
+        bodyDiv.innerHTML = \`
+          <div class="lead-body-item"><strong>Biz:</strong> <span>\${lead.bizType || 'TBD'}</span></div>
+          <div class="lead-body-item"><strong>Challenge:</strong> <span>\${lead.challenge || 'TBD'}</span></div>
+          <div class="lead-body-item"><strong>Workflow:</strong> <span>\${lead.process || 'TBD'}</span></div>
+        \`;
+
+        const footerDiv = document.createElement('div');
+        footerDiv.className = 'lead-footer';
+        
         const badgesDiv = document.createElement('div');
         badgesDiv.className = 'lead-badges';
 
@@ -906,27 +1407,68 @@ function getDashboardHTML(): string {
         if (lead.meetingTime) {
           const meetBadge = document.createElement('span');
           meetBadge.className = 'badge badge-meeting';
-          meetBadge.innerHTML = '📅 ' + lead.meetingTime;
+          meetBadge.innerHTML = '📅 Booked';
           badgesDiv.appendChild(meetBadge);
         }
 
-        card.appendChild(mainDiv);
-        card.appendChild(badgesDiv);
-        listContainer.appendChild(card);
-      });
+        const arrowDiv = document.createElement('span');
+        arrowDiv.className = 'view-details-arrow';
+        arrowDiv.innerHTML = '➔';
 
-      document.getElementById('stat-total').textContent = total;
-      document.getElementById('stat-qualified').textContent = qualified;
-      document.getElementById('stat-meetings').textContent = meetings;
+        footerDiv.appendChild(badgesDiv);
+        footerDiv.appendChild(arrowDiv);
+
+        card.appendChild(topDiv);
+        card.appendChild(emailSpan);
+        card.appendChild(bodyDiv);
+        card.appendChild(footerDiv);
+        gridContainer.appendChild(card);
+      });
     }
 
-    function showModal(summary) {
-      document.getElementById('modal-summary-block').textContent = summary;
-      document.getElementById('modal-overlay').style.display = 'flex';
+    function showModal(lead) {
+      document.getElementById('modal-title').textContent = '+' + lead.phone;
+      document.getElementById('modal-subtitle').textContent = 'Conversation scoping record on ' + new Date(lead.timestamp).toLocaleString();
+      
+      const scoreNum = parseInt(lead.score || '0');
+      const scoreCircle = document.getElementById('modal-score-circle');
+      scoreCircle.className = 'score-circle';
+      if (scoreNum >= 8) scoreCircle.classList.add('score-high');
+      else if (scoreNum >= 5) scoreCircle.classList.add('score-med');
+      else scoreCircle.classList.add('score-low');
+
+      document.getElementById('modal-score-val').textContent = lead.score || 'N/A';
+      document.getElementById('modal-score-reason').innerHTML = \`
+        <em>AI Rating Justification</em>
+        \${lead.scoreReason || 'Rating explanation not provided.'}
+        \${lead.meetingTime ? \\\`<div style="margin-top: 10px; color: var(--cyan); font-weight: 700; display: flex; align-items: center; gap: 6px;">📅 Call Scheduled: \${lead.meetingTime}</div>\\\` : ''}
+      \`;
+
+      document.getElementById('modal-summary-block').textContent = lead.summaryBlock || 'Summary block not generated.';
+      document.getElementById('modal-overlay').classList.add('active');
     }
 
     function closeModal() {
-      document.getElementById('modal-overlay').style.display = 'none';
+      document.getElementById('modal-overlay').classList.remove('active');
+    }
+
+    function closeModalOnOverlay(event) {
+      if (event.target === document.getElementById('modal-overlay')) {
+        closeModal();
+      }
+    }
+
+    function copySummaryText() {
+      const summaryText = document.getElementById('modal-summary-block').textContent;
+      navigator.clipboard.writeText(summaryText)
+        .then(() => {
+          const copyBtn = document.querySelector('.copy-btn');
+          copyBtn.textContent = 'Copied!';
+          setTimeout(() => { copyBtn.textContent = 'Copy Text'; }, 2000);
+        })
+        .catch(err => {
+          console.error('Could not copy summary:', err);
+        });
     }
 
     // Initial load
