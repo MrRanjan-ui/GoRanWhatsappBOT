@@ -6,6 +6,7 @@ import { askGemini, askGeminiRaw, GeminiMessage } from './gemini';
 import { createCalendarEvent } from './services/calendar';
 import { sendLeadEmails } from './services/mailer';
 import { saveLead, updateLeadBooking } from './services/db';
+import { triggerFollowUpCall, scheduleMeetingReminderCall } from './services/callingAgent';
 
 // Initialize dotenv immediately
 dotenv.config();
@@ -407,6 +408,11 @@ async function handleBookingResponse(remoteJid: string, session: Session, userTe
       } else {
         await updateLeadBookingDetails(session);
       }
+
+      // Schedule a reminder call 1 hour before the meeting
+      if (session.leadData.meetingStartIso) {
+        scheduleMeetingReminderCall(session.leadData.phone, session.leadData.meetingStartIso);
+      }
     } catch (err: any) {
       console.error('[MEETING-SCHEDULER] Google Calendar event creation failed, falling back to email calendar invite:', err.message || err);
       
@@ -426,6 +432,11 @@ async function handleBookingResponse(remoteJid: string, session: Session, userTe
         await processAndSaveCompletedLead(remoteJid, session);
       } else {
         await updateLeadBookingDetails(session);
+      }
+
+      // Schedule a reminder call 1 hour before the meeting (even on calendar fallback)
+      if (session.leadData.meetingStartIso) {
+        scheduleMeetingReminderCall(session.leadData.phone, session.leadData.meetingStartIso);
       }
     }
   } else {
@@ -520,6 +531,12 @@ async function processAndSaveCompletedLead(remoteJid: string, session: Session) 
   // Transition to chatting phase
   session.phase = 'chatting';
   console.log(`[LEAD-COMPLETE] Lead processed and saved for ${session.leadData.phone}. Score: ${scoreResult.score}`);
+
+  // If no meeting was booked, trigger an outbound follow-up call
+  if (!session.leadData.meetingTime) {
+    console.log(`[CALLING-AGENT] No meeting booked for ${session.leadData.phone} — triggering follow-up call.`);
+    triggerFollowUpCall(session.leadData.phone);
+  }
 }
 
 /**
@@ -768,6 +785,12 @@ async function handleSessionTimeout(remoteJid: string) {
 
       const timeoutMsg = "It's been a while, so I've saved the details you shared. Feel free to come back anytime to resume our conversation or book a call! 👋 [BUTTONS: Resume Chat | Book a Call | Main Menu]";
       await sendWhatsAppReply(remoteJid, timeoutMsg);
+
+      // Trigger follow-up call if no meeting was booked before timeout
+      if (!session.leadData.meetingTime) {
+        console.log(`[CALLING-AGENT] Session timed out without booking for ${session.leadData.phone} — triggering follow-up call.`);
+        triggerFollowUpCall(session.leadData.phone);
+      }
     } catch (err) {
       console.error('Error compiling timeout lead:', err);
     }

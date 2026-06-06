@@ -1,0 +1,1757 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>GoRan AI — Premium Leads Hub</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&family=Outfit:wght@500;600;700;800;900&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --bg: #070a13;
+      --card-bg: rgba(13, 20, 38, 0.45);
+      --card-hover: rgba(18, 28, 54, 0.65);
+      --border: rgba(255, 255, 255, 0.05);
+      --border-hover: rgba(250, 204, 21, 0.3);
+      --accent: #F6C744;
+      --accent-hover: #facc15;
+      --accent-gradient: linear-gradient(135deg, #F6C744 0%, #facc15 100%);
+      --text: #f1f5f9;
+      --text-muted: #64748b;
+      --success: #10b981;
+      --success-glow: rgba(16, 185, 129, 0.12);
+      --warning: #f59e0b;
+      --warning-glow: rgba(245, 158, 11, 0.12);
+      --cyan: #06b6d4;
+      --cyan-glow: rgba(6, 182, 212, 0.12);
+      --danger: #ef4444;
+      --danger-glow: rgba(239, 68, 68, 0.15);
+    }
+
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+
+    /* Custom Scrollbar */
+    ::-webkit-scrollbar {
+      width: 8px;
+      height: 8px;
+    }
+    ::-webkit-scrollbar-track {
+      background: var(--bg);
+    }
+    ::-webkit-scrollbar-thumb {
+      background: rgba(255, 255, 255, 0.1);
+      border-radius: 100px;
+    }
+    ::-webkit-scrollbar-thumb:hover {
+      background: rgba(255, 255, 255, 0.2);
+    }
+
+    body {
+      font-family: 'Plus Jakarta Sans', sans-serif;
+      background-color: var(--bg);
+      background-image: 
+        radial-gradient(circle at 10% 10%, rgba(246, 199, 68, 0.07) 0%, transparent 40%),
+        radial-gradient(circle at 90% 90%, rgba(6, 182, 212, 0.06) 0%, transparent 40%),
+        radial-gradient(circle at 50% 50%, rgba(16, 185, 129, 0.02) 0%, transparent 50%);
+      background-attachment: fixed;
+      color: var(--text);
+      min-height: 100vh;
+      padding: 40px 20px;
+      overflow-x: hidden;
+    }
+
+    .container {
+      max-width: 1280px;
+      margin: 0 auto;
+    }
+
+    /* Header */
+    header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 32px;
+      border-bottom: 1px solid var(--border);
+      padding-bottom: 24px;
+    }
+
+    .logo-section h1 {
+      font-family: 'Outfit', sans-serif;
+      font-size: 32px;
+      font-weight: 950;
+      letter-spacing: -0.8px;
+      background: linear-gradient(135deg, #ffffff 40%, var(--accent) 100%);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+
+    .logo-section p {
+      font-size: 14px;
+      color: var(--text-muted);
+      margin-top: 4px;
+      font-weight: 500;
+    }
+
+    .header-right {
+      display: flex;
+      align-items: center;
+      gap: 16px;
+    }
+
+    .status-badge {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      background: rgba(16, 185, 129, 0.06);
+      border: 1px solid rgba(16, 185, 129, 0.15);
+      padding: 8px 16px;
+      border-radius: 100px;
+      font-size: 13px;
+      font-weight: 600;
+      color: var(--success);
+      box-shadow: 0 4px 15px rgba(16, 185, 129, 0.05);
+    }
+
+    .status-dot {
+      width: 8px;
+      height: 8px;
+      background-color: var(--success);
+      border-radius: 50%;
+      box-shadow: 0 0 10px var(--success);
+      animation: pulse 2s infinite;
+    }
+
+    @keyframes pulse {
+      0% { transform: scale(0.95); box-shadow: 0 0 0 0 rgba(16, 185, 129, 0.7); }
+      70% { transform: scale(1); box-shadow: 0 0 0 8px rgba(16, 185, 129, 0); }
+      100% { transform: scale(0.95); box-shadow: 0 0 0 0 rgba(16, 185, 129, 0); }
+    }
+
+    .sync-btn {
+      background: rgba(255, 255, 255, 0.04);
+      border: 1px solid var(--border);
+      color: var(--text);
+      width: 38px;
+      height: 38px;
+      border-radius: 10px;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      transition: all 0.2s;
+    }
+
+    .sync-btn:hover {
+      background: rgba(255, 255, 255, 0.1);
+      border-color: rgba(255, 255, 255, 0.2);
+    }
+
+    .sync-btn.loading svg {
+      animation: spin 1s linear infinite;
+    }
+
+    @keyframes spin {
+      100% { transform: rotate(360deg); }
+    }
+
+    /* Stats Grid */
+    .dashboard-summary {
+      display: grid;
+      grid-template-columns: 2fr 1fr;
+      gap: 24px;
+      margin-bottom: 32px;
+    }
+
+    @media (max-width: 992px) {
+      .dashboard-summary {
+        grid-template-columns: 1fr;
+      }
+    }
+
+    .stats-grid {
+      display: grid;
+      grid-template-columns: repeat(2, 1fr);
+      gap: 20px;
+    }
+
+    @media (max-width: 576px) {
+      .stats-grid {
+        grid-template-columns: 1fr;
+      }
+    }
+
+    .stat-card {
+      background: var(--card-bg);
+      backdrop-filter: blur(24px);
+      -webkit-backdrop-filter: blur(24px);
+      border: 1px solid var(--border);
+      border-radius: 16px;
+      padding: 24px;
+      transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+      position: relative;
+      overflow: hidden;
+      display: flex;
+      flex-direction: column;
+      justify-content: space-between;
+    }
+
+    .stat-card::before {
+      content: '';
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      background: linear-gradient(180deg, rgba(255,255,255,0.01) 0%, transparent 100%);
+      pointer-events: none;
+    }
+
+    .stat-card:hover {
+      transform: translateY(-2px);
+      border-color: rgba(246, 199, 68, 0.15);
+      box-shadow: 0 8px 25px rgba(0, 0, 0, 0.25);
+    }
+
+    .stat-top {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 12px;
+    }
+
+    .stat-label {
+      font-size: 13px;
+      font-weight: 600;
+      color: var(--text-muted);
+      text-transform: uppercase;
+      letter-spacing: 0.8px;
+    }
+
+    .stat-icon {
+      font-size: 18px;
+      opacity: 0.8;
+    }
+
+    .stat-value {
+      font-family: 'Outfit', sans-serif;
+      font-size: 38px;
+      font-weight: 800;
+      color: #fff;
+      display: flex;
+      align-items: baseline;
+      gap: 6px;
+    }
+
+    .stat-trend {
+      font-size: 12px;
+      font-weight: 600;
+      color: var(--text-muted);
+      margin-top: 8px;
+      display: flex;
+      align-items: center;
+      gap: 4px;
+    }
+
+    /* Chart Card */
+    .chart-card {
+      background: var(--card-bg);
+      backdrop-filter: blur(24px);
+      -webkit-backdrop-filter: blur(24px);
+      border: 1px solid var(--border);
+      border-radius: 16px;
+      padding: 24px;
+      display: flex;
+      flex-direction: column;
+      justify-content: space-between;
+      min-height: 200px;
+    }
+
+    .chart-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 16px;
+    }
+
+    .chart-title {
+      font-family: 'Outfit', sans-serif;
+      font-size: 15px;
+      font-weight: 700;
+      color: #fff;
+    }
+
+    .chart-container {
+      flex-grow: 1;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      position: relative;
+    }
+
+    .chart-bar-wrap {
+      width: 100%;
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+    }
+
+    .chart-row {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      font-size: 12px;
+    }
+
+    .chart-row-label {
+      width: 80px;
+      font-weight: 600;
+      color: var(--text-muted);
+      text-align: right;
+    }
+
+    .chart-bar-bg {
+      flex: 1;
+      height: 8px;
+      background: rgba(255,255,255,0.04);
+      border-radius: 4px;
+      position: relative;
+      overflow: hidden;
+    }
+
+    .chart-bar-fill {
+      position: absolute;
+      left: 0;
+      top: 0;
+      height: 100%;
+      border-radius: 4px;
+      background: var(--accent-gradient);
+      transition: width 0.8s ease-out;
+    }
+
+    .chart-row-val {
+      width: 25px;
+      font-weight: 700;
+      color: #fff;
+    }
+
+    /* Controls Bar */
+    .controls-bar {
+      background: var(--card-bg);
+      backdrop-filter: blur(24px);
+      -webkit-backdrop-filter: blur(24px);
+      border: 1px solid var(--border);
+      border-radius: 16px;
+      padding: 16px 20px;
+      margin-bottom: 32px;
+      display: flex;
+      flex-wrap: wrap;
+      justify-content: space-between;
+      align-items: center;
+      gap: 16px;
+    }
+
+    .search-input-wrapper {
+      position: relative;
+      flex: 1;
+      min-width: 260px;
+      max-width: 360px;
+    }
+
+    .search-input-wrapper input {
+      width: 100%;
+      background: rgba(0, 0, 0, 0.25);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 10px 16px 10px 38px;
+      color: #fff;
+      font-size: 14px;
+      font-family: inherit;
+      transition: all 0.2s;
+    }
+
+    .search-input-wrapper input:focus {
+      outline: none;
+      border-color: rgba(246, 199, 68, 0.4);
+      background: rgba(0, 0, 0, 0.35);
+      box-shadow: 0 0 0 3px rgba(246, 199, 68, 0.05);
+    }
+
+    .search-icon {
+      position: absolute;
+      left: 12px;
+      top: 50%;
+      transform: translateY(-50%);
+      font-size: 14px;
+      color: var(--text-muted);
+      pointer-events: none;
+    }
+
+    .filter-tabs {
+      display: flex;
+      gap: 6px;
+      background: rgba(0, 0, 0, 0.2);
+      padding: 4px;
+      border-radius: 10px;
+      border: 1px solid var(--border);
+    }
+
+    .tab-btn {
+      background: none;
+      border: none;
+      color: var(--text-muted);
+      padding: 8px 14px;
+      font-size: 13px;
+      font-weight: 600;
+      border-radius: 8px;
+      cursor: pointer;
+      transition: all 0.2s;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+
+    .tab-btn:hover {
+      color: #fff;
+    }
+
+    .tab-btn.active {
+      background: var(--accent);
+      color: #070a13;
+    }
+
+    .tab-count {
+      background: rgba(255, 255, 255, 0.1);
+      padding: 1px 5px;
+      border-radius: 5px;
+      font-size: 11px;
+      font-weight: 700;
+    }
+    
+    .tab-btn.active .tab-count {
+      background: rgba(0, 0, 0, 0.12);
+    }
+
+    .controls-right {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+
+    .sort-wrapper {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .sort-wrapper span {
+      font-size: 13px;
+      color: var(--text-muted);
+      font-weight: 600;
+    }
+
+    .sort-select {
+      background: rgba(0, 0, 0, 0.25);
+      border: 1px solid var(--border);
+      color: #fff;
+      padding: 8px 12px;
+      border-radius: 10px;
+      font-size: 13px;
+      font-family: inherit;
+      cursor: pointer;
+      outline: none;
+      transition: border-color 0.2s;
+    }
+
+    .sort-select:focus {
+      border-color: rgba(246, 199, 68, 0.4);
+    }
+
+    .export-dropdown {
+      position: relative;
+    }
+
+    .export-btn {
+      background: rgba(255, 255, 255, 0.04);
+      border: 1px solid var(--border);
+      color: var(--text);
+      padding: 8px 14px;
+      border-radius: 10px;
+      font-size: 13px;
+      font-weight: 600;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      transition: all 0.2s;
+    }
+
+    .export-btn:hover {
+      background: rgba(255, 255, 255, 0.08);
+      border-color: rgba(255,255,255,0.15);
+    }
+
+    .export-menu {
+      position: absolute;
+      right: 0;
+      top: calc(100% + 8px);
+      background: #0f1526;
+      border: 1px solid rgba(255,255,255,0.08);
+      border-radius: 10px;
+      width: 130px;
+      padding: 6px;
+      display: none;
+      flex-direction: column;
+      gap: 4px;
+      z-index: 100;
+      box-shadow: 0 10px 20px rgba(0,0,0,0.3);
+    }
+
+    .export-menu.active {
+      display: flex;
+    }
+
+    .export-item {
+      background: none;
+      border: none;
+      color: var(--text);
+      padding: 8px 10px;
+      font-size: 12px;
+      font-weight: 600;
+      border-radius: 6px;
+      cursor: pointer;
+      text-align: left;
+      transition: background 0.15s;
+    }
+
+    .export-item:hover {
+      background: rgba(255,255,255,0.05);
+      color: var(--accent);
+    }
+
+    /* Leads Grid */
+    .section-title {
+      font-family: 'Outfit', sans-serif;
+      font-size: 22px;
+      font-weight: 700;
+      margin-bottom: 20px;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      letter-spacing: -0.5px;
+    }
+
+    .leads-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(360px, 1fr));
+      gap: 20px;
+    }
+
+    .lead-card {
+      background: var(--card-bg);
+      backdrop-filter: blur(24px);
+      -webkit-backdrop-filter: blur(24px);
+      border: 1px solid var(--border);
+      border-radius: 16px;
+      padding: 24px;
+      display: flex;
+      flex-direction: column;
+      justify-content: space-between;
+      transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+      cursor: pointer;
+      position: relative;
+    }
+
+    .lead-card:hover {
+      transform: translateY(-4px);
+      border-color: var(--border-hover);
+      box-shadow: 0 12px 25px rgba(0, 0, 0, 0.3);
+      background: var(--card-hover);
+    }
+
+    .lead-top {
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-start;
+      margin-bottom: 12px;
+    }
+
+    .lead-phone {
+      font-family: 'Outfit', sans-serif;
+      font-weight: 700;
+      font-size: 16px;
+      color: #fff;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+
+    .lead-time {
+      font-size: 11px;
+      color: var(--text-muted);
+      font-weight: 500;
+    }
+
+    .lead-email {
+      font-size: 13px;
+      color: var(--accent);
+      text-decoration: none;
+      margin-bottom: 14px;
+      display: block;
+      font-weight: 600;
+      word-break: break-all;
+      transition: opacity 0.15s;
+    }
+
+    .lead-email:hover {
+      opacity: 0.8;
+    }
+
+    .lead-body {
+      background: rgba(0, 0, 0, 0.15);
+      border-radius: 10px;
+      padding: 12px;
+      border: 1px solid rgba(255, 255, 255, 0.02);
+      margin-bottom: 16px;
+      flex-grow: 1;
+    }
+
+    .lead-body-item {
+      font-size: 13px;
+      margin-bottom: 6px;
+      line-height: 1.4;
+    }
+
+    .lead-body-item:last-child {
+      margin-bottom: 0;
+    }
+
+    .lead-body-item strong {
+      color: var(--text-muted);
+      font-weight: 600;
+      margin-right: 4px;
+    }
+
+    .lead-body-item span {
+      color: var(--text);
+    }
+
+    .lead-footer {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      border-top: 1px solid rgba(255, 255, 255, 0.04);
+      padding-top: 14px;
+    }
+
+    .lead-badges {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 6px;
+    }
+
+    .badge {
+      padding: 4px 8px;
+      border-radius: 6px;
+      font-size: 11px;
+      font-weight: 700;
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+      letter-spacing: 0.2px;
+    }
+
+    .badge-score-high {
+      background: var(--success-glow);
+      color: var(--success);
+      border: 1px solid rgba(16, 185, 129, 0.15);
+    }
+
+    .badge-score-med {
+      background: var(--warning-glow);
+      color: var(--warning);
+      border: 1px solid rgba(245, 158, 11, 0.15);
+    }
+
+    .badge-score-low {
+      background: rgba(255, 255, 255, 0.03);
+      color: var(--text-muted);
+      border: 1px solid var(--border);
+    }
+
+    .badge-meeting {
+      background: var(--cyan-glow);
+      color: var(--cyan);
+      border: 1px solid rgba(6, 182, 212, 0.15);
+    }
+
+    .view-details-arrow {
+      color: var(--accent);
+      font-size: 14px;
+      transition: transform 0.2s;
+    }
+
+    .lead-card:hover .view-details-arrow {
+      transform: translateX(3px);
+    }
+
+    /* Whitelist Section */
+    .whitelist-section {
+      margin-top: 48px;
+    }
+
+    .whitelist-container {
+      display: flex;
+      flex-direction: column;
+      gap: 16px;
+    }
+
+    .whitelist-list {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+    }
+
+    .whitelist-tag {
+      background: rgba(255, 255, 255, 0.03);
+      border: 1px solid var(--border);
+      padding: 6px 12px;
+      border-radius: 10px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      font-size: 13px;
+      font-weight: 600;
+      color: #fff;
+      transition: all 0.2s;
+    }
+    
+    .whitelist-tag:hover {
+      border-color: rgba(239, 68, 68, 0.35);
+      background: rgba(239, 68, 68, 0.02);
+    }
+
+    .whitelist-tag .remove-btn {
+      color: var(--text-muted);
+      cursor: pointer;
+      font-weight: 800;
+      font-size: 14px;
+      line-height: 1;
+      padding: 1px;
+      border-radius: 4px;
+      transition: all 0.15s;
+    }
+
+    .whitelist-tag:hover .remove-btn {
+      color: var(--danger);
+    }
+
+    .whitelist-tag .remove-btn:hover {
+      background: var(--danger-glow);
+    }
+
+    .whitelist-add-form {
+      display: flex;
+      gap: 10px;
+      margin-top: 6px;
+      max-width: 440px;
+    }
+
+    .whitelist-add-form input {
+      flex: 1;
+      background: rgba(0, 0, 0, 0.25);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 10px 14px;
+      color: #fff;
+      font-size: 13px;
+      font-family: inherit;
+      transition: border-color 0.2s;
+    }
+
+    .whitelist-add-form input:focus {
+      outline: none;
+      border-color: rgba(246, 199, 68, 0.4);
+    }
+
+    .whitelist-add-form button {
+      background: var(--accent-gradient);
+      color: #070a13;
+      border: none;
+      border-radius: 10px;
+      padding: 10px 20px;
+      font-size: 13px;
+      font-weight: 750;
+      cursor: pointer;
+      transition: opacity 0.2s;
+      box-shadow: 0 4px 12px rgba(246, 199, 68, 0.15);
+    }
+
+    .whitelist-add-form button:hover {
+      opacity: 0.9;
+    }
+
+    /* Modal Drawer styling */
+    .modal-overlay {
+      position: fixed;
+      top: 0;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      background: rgba(3, 6, 15, 0.8);
+      backdrop-filter: blur(16px);
+      -webkit-backdrop-filter: blur(16px);
+      display: none;
+      justify-content: flex-end;
+      z-index: 1000;
+    }
+
+    .modal {
+      background: #0c101d;
+      border-left: 1px solid rgba(255, 255, 255, 0.06);
+      width: 100%;
+      max-width: 580px;
+      height: 100%;
+      overflow-y: auto;
+      padding: 40px;
+      position: relative;
+      box-shadow: -15px 0 40px rgba(0,0,0,0.5);
+      display: flex;
+      flex-direction: column;
+      transform: translateX(100%);
+      transition: transform 0.35s cubic-bezier(0.16, 1, 0.3, 1);
+    }
+
+    .modal-overlay.active {
+      display: flex;
+    }
+
+    .modal-overlay.active .modal {
+      transform: translateX(0);
+    }
+
+    .modal-close {
+      position: absolute;
+      top: 28px;
+      right: 28px;
+      background: rgba(255,255,255,0.03);
+      border: 1px solid var(--border);
+      border-radius: 50%;
+      width: 32px;
+      height: 32px;
+      color: var(--text);
+      font-size: 18px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+
+    .modal-close:hover {
+      background: rgba(255,255,255,0.08);
+      transform: rotate(90deg);
+    }
+
+    .modal-header {
+      margin-bottom: 24px;
+      border-bottom: 1px solid var(--border);
+      padding-bottom: 16px;
+      margin-top: 10px;
+    }
+
+    .modal-title {
+      font-family: 'Outfit', sans-serif;
+      font-size: 26px;
+      font-weight: 800;
+      color: #fff;
+    }
+    
+    .modal-subtitle {
+      font-size: 13px;
+      color: var(--text-muted);
+      margin-top: 4px;
+      font-weight: 500;
+    }
+
+    /* Score Meter */
+    .score-meter-wrapper {
+      display: flex;
+      align-items: center;
+      gap: 16px;
+      background: rgba(255, 255, 255, 0.02);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 16px;
+      margin-bottom: 24px;
+    }
+
+    .score-circle {
+      width: 64px;
+      height: 64px;
+      border-radius: 50%;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      font-family: 'Outfit', sans-serif;
+      font-weight: 850;
+      border: 4px solid var(--border);
+      flex-shrink: 0;
+    }
+    
+    .score-circle.score-high {
+      border-color: var(--success);
+      color: var(--success);
+      background: var(--success-glow);
+      box-shadow: 0 0 15px rgba(16, 185, 129, 0.1);
+    }
+    
+    .score-circle.score-med {
+      border-color: var(--warning);
+      color: var(--warning);
+      background: var(--warning-glow);
+      box-shadow: 0 0 15px rgba(245, 158, 11, 0.1);
+    }
+    
+    .score-circle.score-low {
+      border-color: var(--text-muted);
+      color: var(--text-muted);
+      background: rgba(255,255,255,0.02);
+    }
+    
+    .score-circle-value {
+      font-size: 18px;
+      line-height: 1;
+    }
+    
+    .score-circle-label {
+      font-size: 8px;
+      text-transform: uppercase;
+      margin-top: 1px;
+      font-weight: 700;
+    }
+    
+    .score-reason-text {
+      flex: 1;
+      font-size: 13px;
+      line-height: 1.5;
+      color: var(--text);
+    }
+    
+    .score-reason-text em {
+      display: block;
+      font-style: normal;
+      font-size: 11px;
+      color: var(--text-muted);
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      margin-bottom: 2px;
+    }
+
+    .modal-actions {
+      display: flex;
+      gap: 12px;
+      margin-bottom: 24px;
+    }
+
+    .action-btn {
+      flex: 1;
+      padding: 10px 16px;
+      border-radius: 10px;
+      font-size: 13px;
+      font-weight: 700;
+      cursor: pointer;
+      text-decoration: none;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+      transition: all 0.2s;
+    }
+
+    .action-btn-whatsapp {
+      background: #25d366;
+      color: #070a13;
+      border: none;
+    }
+
+    .action-btn-whatsapp:hover {
+      background: #20ba59;
+      box-shadow: 0 4px 12px rgba(37, 211, 102, 0.2);
+    }
+
+    .action-btn-email {
+      background: rgba(255,255,255,0.04);
+      color: #fff;
+      border: 1px solid var(--border);
+    }
+
+    .action-btn-email:hover {
+      background: rgba(255,255,255,0.08);
+      border-color: rgba(255,255,255,0.15);
+    }
+
+    .summary-title {
+      font-family: 'Outfit', sans-serif;
+      font-size: 15px;
+      font-weight: 700;
+      color: #fff;
+      margin-bottom: 12px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+
+    .copy-btn {
+      background: rgba(255, 255, 255, 0.04);
+      border: 1px solid var(--border);
+      color: var(--text);
+      padding: 6px 12px;
+      border-radius: 6px;
+      font-size: 11px;
+      font-weight: 700;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+
+    .copy-btn:hover {
+      background: rgba(255, 255, 255, 0.08);
+      color: #fff;
+    }
+
+    .summary-block {
+      background: #040710;
+      color: var(--cyan);
+      font-family: 'SFMono-Regular', Consolas, 'Liberation Mono', Menlo, monospace;
+      padding: 20px;
+      border-radius: 12px;
+      white-space: pre-wrap;
+      font-size: 12.5px;
+      line-height: 1.6;
+      border: 1px solid rgba(6, 182, 212, 0.06);
+      overflow-x: auto;
+      flex-grow: 1;
+    }
+
+    .empty-state {
+      grid-column: 1 / -1;
+      text-align: center;
+      padding: 64px 20px;
+      color: var(--text-muted);
+      border: 2px dashed rgba(255,255,255,0.03);
+      border-radius: 16px;
+      background: rgba(255, 255, 255, 0.005);
+    }
+
+    .empty-state-icon {
+      font-size: 36px;
+      margin-bottom: 12px;
+      display: block;
+    }
+
+    .empty-state-title {
+      font-family: 'Outfit', sans-serif;
+      font-size: 17px;
+      font-weight: 600;
+      color: var(--text);
+      margin-bottom: 4px;
+    }
+
+    .empty-state p {
+      font-size: 13px;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <header>
+      <div class="logo-section">
+        <h1><span>⚡</span> GoRan AI</h1>
+        <p>Agency Operations & Lead Scoping Panel</p>
+      </div>
+      <div class="header-right">
+        <div class="status-badge">
+          <span class="status-dot"></span>
+          <span>Meta WhatsApp Bot Active</span>
+        </div>
+        <button class="sync-btn" id="sync-btn" onclick="forceRefresh()" title="Sync Leads">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M21.5 2v6h-6M21.34 15.57a10 10 0 1 1-.57-8.38l5.67-5.67"/>
+          </svg>
+        </button>
+      </div>
+    </header>
+
+    <div class="dashboard-summary">
+      <!-- KPI Stats Grid -->
+      <div class="stats-grid">
+        <div class="stat-card">
+          <div class="stat-top">
+            <span class="stat-label">Total Leads</span>
+            <span class="stat-icon">👥</span>
+          </div>
+          <div class="stat-value" id="stat-total">0</div>
+          <div class="stat-trend">⚡ Live Sync Enabled</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-top">
+            <span class="stat-label">Highly Qualified</span>
+            <span class="stat-icon" style="color: var(--success);">🔥</span>
+          </div>
+          <div class="stat-value" id="stat-qualified" style="color: var(--success);">0</div>
+          <div class="stat-trend" id="stat-qualified-pct">0% of total leads</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-top">
+            <span class="stat-label">Meetings Scheduled</span>
+            <span class="stat-icon" style="color: var(--cyan);">📅</span>
+          </div>
+          <div class="stat-value" id="stat-meetings" style="color: var(--cyan);">0</div>
+          <div class="stat-trend" id="stat-meetings-pct">0% booking rate</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-top">
+            <span class="stat-label">Avg Lead Score</span>
+            <span class="stat-icon" style="color: var(--accent);">★</span>
+          </div>
+          <div class="stat-value" id="stat-avg-score" style="color: var(--accent);">0.0<span style="font-size: 16px; font-weight: 500; color: var(--text-muted);">/10</span></div>
+          <div class="stat-trend" id="stat-avg-score-desc">Awaiting ratings</div>
+        </div>
+      </div>
+
+      <!-- Score Breakdown Chart Card -->
+      <div class="chart-card">
+        <div class="chart-header">
+          <span class="chart-title">Lead Score Distribution</span>
+          <span style="font-size: 11px; color: var(--text-muted); font-weight: 600; text-transform: uppercase;">Ratings Gauge</span>
+        </div>
+        <div class="chart-container">
+          <div class="chart-bar-wrap">
+            <div class="chart-row">
+              <span class="chart-row-label">Hot (8-10)</span>
+              <div class="chart-bar-bg">
+                <div class="chart-bar-fill" id="chart-fill-hot" style="width: 0%; background: linear-gradient(90deg, #10b981 0%, #059669 100%);"></div>
+              </div>
+              <span class="chart-row-val" id="chart-val-hot">0</span>
+            </div>
+            <div class="chart-row">
+              <span class="chart-row-label">Warm (5-7)</span>
+              <div class="chart-bar-bg">
+                <div class="chart-bar-fill" id="chart-fill-warm" style="width: 0%; background: linear-gradient(90deg, #f59e0b 0%, #d97706 100%);"></div>
+              </div>
+              <span class="chart-row-val" id="chart-val-warm">0</span>
+            </div>
+            <div class="chart-row">
+              <span class="chart-row-label">Cold (0-4)</span>
+              <div class="chart-bar-bg">
+                <div class="chart-bar-fill" id="chart-fill-cold" style="width: 0%; background: linear-gradient(90deg, #64748b 0%, #475569 100%);"></div>
+              </div>
+              <span class="chart-row-val" id="chart-val-cold">0</span>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Filter & Controls bar -->
+    <div class="controls-bar">
+      <div class="search-input-wrapper">
+        <span class="search-icon">🔍</span>
+        <input type="text" id="search-input" placeholder="Search by phone, email, challenge, or biz..." oninput="handleSearch()" />
+      </div>
+
+      <div class="filter-tabs">
+        <button class="tab-btn active" id="tab-all" onclick="setFilter('all')">
+          All Leads <span class="tab-count" id="count-all">0</span>
+        </button>
+        <button class="tab-btn" id="tab-high" onclick="setFilter('high')">
+          Qualified (8+) <span class="tab-count" id="count-high">0</span>
+        </button>
+        <button class="tab-btn" id="tab-meetings" onclick="setFilter('meetings')">
+          Meetings <span class="tab-count" id="count-meetings">0</span>
+        </button>
+      </div>
+
+      <div class="controls-right">
+        <div class="sort-wrapper">
+          <span>Sort</span>
+          <select class="sort-select" id="sort-select" onchange="handleSort()">
+            <option value="newest">Newest First</option>
+            <option value="score_desc">Score: High to Low</option>
+            <option value="teamsize_desc">Team: Large to Small</option>
+          </select>
+        </div>
+
+        <div class="export-dropdown">
+          <button class="export-btn" onclick="toggleExportMenu(event)">
+            <span>📥 Export</span>
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M6 9l6 6 6-6"/>
+            </svg>
+          </button>
+          <div class="export-menu" id="export-menu">
+            <button class="export-item" onclick="exportData('csv')">Export as CSV</button>
+            <button class="export-item" onclick="exportData('json')">Export as JSON</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="section-title">
+      <span>⚡</span> Real-time Lead Streams
+    </div>
+
+    <div class="leads-grid" id="leads-grid">
+      <div class="empty-state">
+        <span class="empty-state-icon">📡</span>
+        <div class="empty-state-title">Awaiting Qualified Leads</div>
+        <p>All conversations triggered on WhatsApp will populate here in real-time.</p>
+      </div>
+    </div>
+
+    <!-- Whitelisted Numbers Manager -->
+    <div class="whitelist-section">
+      <div class="section-title">
+        <span>🔒</span> Sandbox Access Whitelist
+      </div>
+      <div class="stat-card">
+        <p style="font-size: 13px; color: var(--text-muted); margin-bottom: 20px; line-height: 1.6;">
+          When Whitelisting is active in environment settings, only the numbers listed below will trigger bot exchanges. Add numbers with country code (e.g., 91 for India) without '+' or spaces.
+        </p>
+        
+        <div class="whitelist-container">
+          <div class="whitelist-list" id="whitelist-list">
+            <span style="color: var(--text-muted); font-size: 13px;">Loading sandbox numbers...</span>
+          </div>
+          
+          <div class="whitelist-add-form">
+            <input type="text" id="new-number-input" placeholder="e.g. 919934225353" maxlength="20" />
+            <button onclick="addNumber()">Add to Whitelist</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Details Modal Sidebar Drawer -->
+  <div class="modal-overlay" id="modal-overlay" onclick="closeModalOnOverlay(event)">
+    <div class="modal" onclick="event.stopPropagation()">
+      <button class="modal-close" onclick="closeModal()">&times;</button>
+      
+      <div class="modal-header">
+        <div class="modal-title" id="modal-title">+91 99999 99999</div>
+        <div class="modal-subtitle" id="modal-subtitle">Lead Scoping Breakdown</div>
+      </div>
+
+      <!-- Score widget -->
+      <div class="score-meter-wrapper">
+        <div class="score-circle" id="modal-score-circle">
+          <span class="score-circle-value" id="modal-score-val">0/10</span>
+          <span class="score-circle-label">Score</span>
+        </div>
+        <div class="score-reason-text" id="modal-score-reason">
+          <em>Lead Qualification Rating</em>
+          Awaiting details...
+        </div>
+      </div>
+
+      <!-- Actions inside modal -->
+      <div class="modal-actions">
+        <a href="#" target="_blank" class="action-btn action-btn-whatsapp" id="modal-wa-btn">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="currentColor">
+            <path d="M12.012 2c-5.506 0-9.989 4.478-9.99 9.984a9.96 9.96 0 0 0 1.333 4.982L2 22l5.202-1.362a9.939 9.939 0 0 0 4.808 1.239h.005c5.507 0 9.99-4.478 9.99-9.985a9.983 9.983 0 0 0-9.993-9.892zm5.82 14.195c-.247.694-1.42 1.293-1.954 1.353-.487.054-1.127.087-1.802-.128a11.14 11.14 0 0 1-4.707-2.916 11.385 11.385 0 0 1-2.436-3.864c-.211-.645-.224-1.28-.021-1.787.202-.505.626-.957.828-1.18.202-.224.269-.292.404-.494.135-.202.1-.37.05-.539-.05-.169-.472-1.143-.647-1.564-.17-.41-.356-.356-.49-.356h-.42c-.15 0-.397.056-.606.28-.209.225-.808.786-.808 1.92 0 1.133.824 2.226.939 2.378.115.152 1.62 2.477 3.926 3.473.548.237 1.05.393 1.41.507.55.174 1.05.15 1.447.09.44-.067 1.42-.58 1.623-1.14.202-.562.202-1.045.14-1.146-.062-.1-.23-.157-.5-.292-.27-.135-1.59-.785-1.838-.875-.248-.09-.427-.135-.607.135-.179.27-.696.875-.853 1.054-.158.18-.315.202-.585.067-.27-.135-1.138-.419-2.167-1.337-.8-.713-1.34-1.593-1.498-1.863-.158-.27-.017-.417.118-.552.121-.122.27-.315.405-.472.135-.157.18-.27.27-.45.09-.18.045-.337-.023-.472-.067-.135-.607-1.462-.831-2.002z"/>
+          </svg>
+          WhatsApp Chat
+        </a>
+        <a href="#" class="action-btn action-btn-email" id="modal-email-btn">
+          ✉️ Send Email
+        </a>
+      </div>
+
+      <!-- Raw text summary -->
+      <div class="summary-title">
+        <span>AI Scoping Summary</span>
+        <button class="copy-btn" onclick="copySummaryText()">Copy Details</button>
+      </div>
+      <pre class="summary-block" id="modal-summary-block"></pre>
+    </div>
+  </div>
+
+  <script>
+    let activeLeads = [];
+    let whitelist = [];
+    let currentFilter = 'all'; // 'all' | 'high' | 'meetings'
+    let currentSearch = '';
+    let currentSort = 'newest'; // 'newest' | 'score_desc' | 'teamsize_desc'
+
+    async function fetchLeads(force = false) {
+      const btn = document.getElementById('sync-btn');
+      if (force && btn) btn.classList.add('loading');
+      
+      try {
+        const response = await fetch('/api/leads');
+        const leads = await response.json();
+        
+        // Refresh only if data changed or force is true
+        if (force || JSON.stringify(leads) !== JSON.stringify(activeLeads)) {
+          activeLeads = leads;
+          processAndRender();
+        }
+      } catch (err) {
+        console.error('Error fetching leads:', err);
+      } finally {
+        if (btn) {
+          setTimeout(() => { btn.classList.remove('loading'); }, 600);
+        }
+      }
+    }
+
+    async function forceRefresh() {
+      await fetchLeads(true);
+      await fetchWhitelist();
+    }
+
+    async function fetchWhitelist() {
+      try {
+        const response = await fetch('/api/whitelist');
+        whitelist = await response.json();
+        renderWhitelist();
+      } catch (err) {
+        console.error('Error fetching whitelist:', err);
+      }
+    }
+
+    function renderWhitelist() {
+      const container = document.getElementById('whitelist-list');
+      if (!container) return;
+      
+      // Clear the container first to avoid duplicate tags on refresh
+      container.innerHTML = '';
+      
+      if (!whitelist || whitelist.length === 0) {
+        container.innerHTML = '<span style="color: var(--text-muted); font-size: 13px;">No numbers whitelisted. Bot will ignore sandbox messages.</span>';
+        return;
+      }
+      
+      whitelist.forEach(num => {
+        const tag = document.createElement('div');
+        tag.className = 'whitelist-tag';
+        tag.innerHTML = `
+          <span>+${num}</span>
+          <span class="remove-btn" onclick="deleteNumber('${num}')">&times;</span>
+        `;
+        container.appendChild(tag);
+      });
+    }
+
+    async function saveWhitelistToServer() {
+      try {
+        const response = await fetch('/api/whitelist', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify({ numbers: whitelist })
+        });
+        const result = await response.json();
+        if (result.success) {
+          whitelist = result.numbers || whitelist;
+          renderWhitelist();
+        } else {
+          alert('Failed to save whitelist.');
+        }
+      } catch (err) {
+        console.error('Error saving whitelist:', err);
+        alert('Server connection error.');
+      }
+    }
+
+    function addNumber() {
+      const input = document.getElementById('new-number-input');
+      const val = input.value.trim();
+      if (!val) return;
+      if (!/^\d+$/.test(val)) {
+        alert('Please enter digits only (e.g. 919934225353)');
+        return;
+      }
+      if (whitelist.includes(val)) {
+        alert('Number is already whitelisted.');
+        return;
+      }
+      whitelist.push(val);
+      input.value = '';
+      saveWhitelistToServer();
+    }
+
+    function deleteNumber(num) {
+      if (confirm(`Remove +${num} from the whitelist?`)) {
+        whitelist = whitelist.filter(n => n !== num);
+        saveWhitelistToServer();
+      }
+    }
+
+    function handleSearch() {
+      currentSearch = document.getElementById('search-input').value.toLowerCase().trim();
+      processAndRender();
+    }
+
+    function setFilter(filterType) {
+      document.querySelectorAll('.tab-btn').forEach(btn => btn.classList.remove('active'));
+      
+      if (filterType === 'all') document.getElementById('tab-all').classList.add('active');
+      if (filterType === 'high') document.getElementById('tab-high').classList.add('active');
+      if (filterType === 'meetings') document.getElementById('tab-meetings').classList.add('active');
+      
+      currentFilter = filterType;
+      processAndRender();
+    }
+
+    function handleSort() {
+      currentSort = document.getElementById('sort-select').value;
+      processAndRender();
+    }
+
+    function toggleExportMenu(event) {
+      event.stopPropagation();
+      const menu = document.getElementById('export-menu');
+      menu.classList.toggle('active');
+    }
+
+    // Close dropdowns/modals on click outside
+    document.addEventListener('click', () => {
+      document.getElementById('export-menu').classList.remove('active');
+    });
+
+    function exportData(format) {
+      if (activeLeads.length === 0) {
+        alert('No leads data to export.');
+        return;
+      }
+
+      if (format === 'json') {
+        const jsonStr = JSON.stringify(activeLeads, null, 2);
+        const blob = new Blob([jsonStr], { type: 'application/json' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `goran_leads_${new Date().toISOString().split('T')[0]}.json`;
+        a.click();
+        URL.revokeObjectURL(url);
+      } else if (format === 'csv') {
+        const headers = ['Phone', 'Timestamp', 'Email', 'Biz Type', 'Challenge', 'Current Process', 'Team Size', 'Score', 'Meeting Scheduled', 'Meeting Link'];
+        const rows = activeLeads.map(lead => [
+          `+${lead.phone || ''}`,
+          lead.timestamp || '',
+          lead.email || '',
+          (lead.bizType || '').replace(/"/g, '""'),
+          (lead.challenge || '').replace(/"/g, '""'),
+          (lead.process || '').replace(/"/g, '""'),
+          lead.teamSize || '',
+          lead.score || '',
+          lead.meetingTime || '',
+          lead.meetingLink || ''
+        ]);
+
+        const csvContent = [
+          headers.join(','),
+          ...rows.map(e => e.map(val => `"${val}"`).join(','))
+        ].join('\n');
+
+        const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `goran_leads_${new Date().toISOString().split('T')[0]}.csv`;
+        a.click();
+        URL.revokeObjectURL(url);
+      }
+    }
+
+    function processAndRender() {
+      let filtered = [...activeLeads];
+
+      // Update counters before filter
+      const countAll = filtered.length;
+      const countHigh = filtered.filter(l => {
+        const scoreVal = parseInt(l.score || '0');
+        return scoreVal >= 8;
+      }).length;
+      const countMeetings = filtered.filter(l => l.meetingTime).length;
+
+      document.getElementById('count-all').textContent = countAll;
+      document.getElementById('count-high').textContent = countHigh;
+      document.getElementById('count-meetings').textContent = countMeetings;
+
+      // 1. Calculate and update KPI Statistics
+      document.getElementById('stat-total').textContent = countAll;
+      document.getElementById('stat-qualified').textContent = countHigh;
+      
+      const qualPct = countAll > 0 ? Math.round((countHigh / countAll) * 100) : 0;
+      document.getElementById('stat-qualified-pct').textContent = `${qualPct}% of total leads`;
+
+      document.getElementById('stat-meetings').textContent = countMeetings;
+      const meetPct = countAll > 0 ? Math.round((countMeetings / countAll) * 100) : 0;
+      document.getElementById('stat-meetings-pct').textContent = `${meetPct}% booking rate`;
+
+      // Calculate Average Score
+      let totalScores = 0;
+      let validScoresCount = 0;
+      let scoreBins = { hot: 0, warm: 0, cold: 0 };
+
+      activeLeads.forEach(lead => {
+        const scoreStr = lead.score || '';
+        const num = parseInt(scoreStr.match(/\d+/) ? scoreStr.match(/\d+/)[0] : 'NaN');
+        if (!isNaN(num)) {
+          totalScores += num;
+          validScoresCount++;
+          if (num >= 8) scoreBins.hot++;
+          else if (num >= 5) scoreBins.warm++;
+          else scoreBins.cold++;
+        }
+      });
+
+      const avgScore = validScoresCount > 0 ? (totalScores / validScoresCount).toFixed(1) : '0.0';
+      document.getElementById('stat-avg-score').innerHTML = `${avgScore}<span style="font-size: 14px; font-weight: 500; color: var(--text-muted);">/10</span>`;
+      
+      let ratingDesc = 'No scores recorded';
+      if (validScoresCount > 0) {
+        const avg = parseFloat(avgScore);
+        if (avg >= 8) ratingDesc = 'Excellent lead temperature';
+        else if (avg >= 5) ratingDesc = 'Moderate engagement';
+        else ratingDesc = 'Low average qualification';
+      }
+      document.getElementById('stat-avg-score-desc').textContent = ratingDesc;
+
+      // Update Chart Fill Widths
+      const hotPct = validScoresCount > 0 ? Math.round((scoreBins.hot / validScoresCount) * 100) : 0;
+      const warmPct = validScoresCount > 0 ? Math.round((scoreBins.warm / validScoresCount) * 100) : 0;
+      const coldPct = validScoresCount > 0 ? Math.round((scoreBins.cold / validScoresCount) * 100) : 0;
+
+      document.getElementById('chart-fill-hot').style.width = `${hotPct}%`;
+      document.getElementById('chart-fill-warm').style.width = `${warmPct}%`;
+      document.getElementById('chart-fill-cold').style.width = `${coldPct}%`;
+
+      document.getElementById('chart-val-hot').textContent = scoreBins.hot;
+      document.getElementById('chart-val-warm').textContent = scoreBins.warm;
+      document.getElementById('chart-val-cold').textContent = scoreBins.cold;
+
+      // 2. Apply Search
+      if (currentSearch) {
+        filtered = filtered.filter(lead => {
+          return (
+            (lead.phone && lead.phone.toLowerCase().includes(currentSearch)) ||
+            (lead.email && lead.email.toLowerCase().includes(currentSearch)) ||
+            (lead.bizType && lead.bizType.toLowerCase().includes(currentSearch)) ||
+            (lead.challenge && lead.challenge.toLowerCase().includes(currentSearch)) ||
+            (lead.process && lead.process.toLowerCase().includes(currentSearch))
+          );
+        });
+      }
+
+      // 3. Apply Tabs
+      if (currentFilter === 'high') {
+        filtered = filtered.filter(lead => {
+          const scoreVal = parseInt(lead.score || '0');
+          return scoreVal >= 8;
+        });
+      } else if (currentFilter === 'meetings') {
+        filtered = filtered.filter(lead => lead.meetingTime);
+      }
+
+      // 4. Apply Sorting
+      if (currentSort === 'newest') {
+        filtered.sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
+      } else if (currentSort === 'score_desc') {
+        filtered.sort((a, b) => {
+          const scoreA = parseInt(a.score || '0');
+          const scoreB = parseInt(b.score || '0');
+          return scoreB - scoreA;
+        });
+      } else if (currentSort === 'teamsize_desc') {
+        filtered.sort((a, b) => {
+          const getNum = str => {
+            const m = (str || '').match(/\d+/);
+            return m ? parseInt(m[0]) : 0;
+          };
+          return getNum(b.teamSize) - getNum(a.teamSize);
+        });
+      }
+
+      renderLeadsGrid(filtered);
+    }
+
+    function renderLeadsGrid(leads) {
+      const gridContainer = document.getElementById('leads-grid');
+      if (!gridContainer) return;
+      
+      if (leads.length === 0) {
+        gridContainer.innerHTML = `
+          <div class="empty-state">
+            <span class="empty-state-icon">📡</span>
+            <div class="empty-state-title">No leads match the filters</div>
+            <p>Try resetting the search terms or choosing another tab status.</p>
+          </div>
+        `;
+        return;
+      }
+
+      gridContainer.innerHTML = '';
+
+      leads.forEach(lead => {
+        const scoreNum = parseInt(lead.score || '0');
+        let scoreClass = 'badge-score-low';
+        if (scoreNum >= 8) scoreClass = 'badge-score-high';
+        else if (scoreNum >= 5) scoreClass = 'badge-score-med';
+
+        const card = document.createElement('div');
+        card.className = 'lead-card';
+        card.onclick = () => showModal(lead);
+
+        // Header
+        const topDiv = document.createElement('div');
+        topDiv.className = 'lead-top';
+        
+        // Relative Time Calculation
+        const dateObj = new Date(lead.timestamp);
+        const timeFormatted = isNaN(dateObj.getTime()) ? 'N/A' : dateObj.toLocaleDateString() + ' ' + dateObj.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'});
+        
+        topDiv.innerHTML = `
+          <span class="lead-phone">📞 +${lead.phone}</span>
+          <span class="lead-time" title="${lead.timestamp}">${timeFormatted}</span>
+        `;
+
+        // Email Link
+        const emailSpan = document.createElement('span');
+        emailSpan.className = 'lead-email';
+        emailSpan.textContent = lead.email || 'No email provided';
+
+        // Body fields list
+        const bodyDiv = document.createElement('div');
+        bodyDiv.className = 'lead-body';
+        bodyDiv.innerHTML = `
+          <div class="lead-body-item"><strong>Biz:</strong> <span>${lead.bizType || 'TBD'}</span></div>
+          <div class="lead-body-item"><strong>Challenge:</strong> <span>${lead.challenge || 'TBD'}</span></div>
+          <div class="lead-body-item"><strong>Workflow:</strong> <span>${lead.process || 'TBD'}</span></div>
+        `;
+
+        // Footer / Badges
+        const footerDiv = document.createElement('div');
+        footerDiv.className = 'lead-footer';
+        
+        const badgesDiv = document.createElement('div');
+        badgesDiv.className = 'lead-badges';
+
+        const scoreBadge = document.createElement('span');
+        scoreBadge.className = 'badge ' + scoreClass;
+        scoreBadge.textContent = '★ ' + (lead.score || 'N/A');
+        badgesDiv.appendChild(scoreBadge);
+
+        if (lead.meetingTime) {
+          const meetBadge = document.createElement('span');
+          meetBadge.className = 'badge badge-meeting';
+          meetBadge.innerHTML = '📅 Booked';
+          badgesDiv.appendChild(meetBadge);
+        }
+
+        const arrowDiv = document.createElement('span');
+        arrowDiv.className = 'view-details-arrow';
+        arrowDiv.innerHTML = '➔';
+
+        footerDiv.appendChild(badgesDiv);
+        footerDiv.appendChild(arrowDiv);
+
+        card.appendChild(topDiv);
+        card.appendChild(emailSpan);
+        card.appendChild(bodyDiv);
+        card.appendChild(footerDiv);
+        gridContainer.appendChild(card);
+      });
+    }
+
+    function showModal(lead) {
+      document.getElementById('modal-title').textContent = '+' + lead.phone;
+      
+      const dateObj = new Date(lead.timestamp);
+      const readableDate = isNaN(dateObj.getTime()) ? 'Unknown date' : dateObj.toLocaleString();
+      document.getElementById('modal-subtitle').textContent = 'Conversation scoping record on ' + readableDate;
+      
+      const scoreNum = parseInt(lead.score || '0');
+      const scoreCircle = document.getElementById('modal-score-circle');
+      scoreCircle.className = 'score-circle';
+      if (scoreNum >= 8) scoreCircle.classList.add('score-high');
+      else if (scoreNum >= 5) scoreCircle.classList.add('score-med');
+      else scoreCircle.classList.add('score-low');
+
+      document.getElementById('modal-score-val').textContent = lead.score || 'N/A';
+      
+      let meetingHTML = '';
+      if (lead.meetingTime) {
+        meetingHTML = `<div style="margin-top: 10px; color: var(--cyan); font-weight: 700; display: flex; align-items: center; gap: 6px;">📅 Call Scheduled: ${lead.meetingTime}</div>`;
+        if (lead.meetingLink) {
+          meetingHTML += `<div style="margin-top: 6px; font-size: 12px;"><a href="${lead.meetingLink}" target="_blank" style="color: var(--accent); text-decoration: underline; font-weight: 600;">Open Calendar Event ➔</a></div>`;
+        }
+      }
+
+      document.getElementById('modal-score-reason').innerHTML = `
+        <em>AI Rating Justification</em>
+        ${lead.scoreReason || 'Rating explanation not provided.'}
+        ${meetingHTML}
+      `;
+
+      // Set links for WhatsApp & Email actions
+      const waBtn = document.getElementById('modal-wa-btn');
+      waBtn.href = `https://wa.me/${lead.phone}`;
+      
+      const emailBtn = document.getElementById('modal-email-btn');
+      if (lead.email) {
+        emailBtn.href = `mailto:${lead.email}?subject=GoRan%20AI%20-%20AI%20Automation%20Scoping%20Session&body=Hi,%0D%0A%0D%0AThanks%20for%20connecting%20with%20GoRan%20AI.%20We%20wanted%20to%20follow%20up%20on%20your%20interest%20in%20custom%20AI%20solutions...`;
+        emailBtn.style.display = 'inline-flex';
+      } else {
+        emailBtn.style.display = 'none';
+      }
+
+      document.getElementById('modal-summary-block').textContent = lead.summaryBlock || 'Summary block not generated.';
+      document.getElementById('modal-overlay').classList.add('active');
+    }
+
+    function closeModal() {
+      document.getElementById('modal-overlay').classList.remove('active');
+    }
+
+    function closeModalOnOverlay(event) {
+      if (event.target === document.getElementById('modal-overlay')) {
+        closeModal();
+      }
+    }
+
+    function copySummaryText() {
+      const summaryText = document.getElementById('modal-summary-block').textContent;
+      navigator.clipboard.writeText(summaryText)
+        .then(() => {
+          const copyBtn = document.querySelector('.copy-btn');
+          copyBtn.textContent = 'Copied!';
+          setTimeout(() => { copyBtn.textContent = 'Copy Details'; }, 2000);
+        })
+        .catch(err => {
+          console.error('Could not copy summary:', err);
+        });
+    }
+
+    // Initial load
+    fetchLeads();
+    fetchWhitelist();
+    
+    // Poll leads every 5 seconds
+    setInterval(fetchLeads, 5000);
+  </script>
+</body>
+</html>

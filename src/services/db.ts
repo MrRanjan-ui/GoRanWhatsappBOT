@@ -1,7 +1,10 @@
 import { MongoClient, Db } from 'mongodb';
 import * as dotenv from 'dotenv';
+import * as fs from 'fs';
+import * as path from 'path';
 
 dotenv.config();
+
 
 const uri = process.env.MONGODB_URI || 'mongodb://localhost:27017/goran-bot';
 let client: MongoClient;
@@ -22,6 +25,9 @@ export async function connectDb(): Promise<Db> {
     
     // Seed whitelist from .env if the database setting is empty
     await seedWhitelistIfEmpty();
+    
+    // Seed leads from leads.json if database collection is empty
+    await seedLeadsIfEmpty();
     
     return db;
   } catch (error) {
@@ -181,3 +187,36 @@ async function seedWhitelistIfEmpty() {
     console.error('[DB-SETTINGS] Error seeding whitelist:', error);
   }
 }
+
+async function seedLeadsIfEmpty() {
+  try {
+    const database = getDb();
+    const collection = database.collection('leads');
+    const leadsPath = path.join(__dirname, '../../leads.json');
+    if (fs.existsSync(leadsPath)) {
+      const rawData = fs.readFileSync(leadsPath, 'utf8');
+      const leads = JSON.parse(rawData);
+      if (leads && leads.length > 0) {
+        let insertedCount = 0;
+        for (const lead of leads) {
+          // Check if this lead already exists in DB by matching phone and timestamp
+          const exists = await collection.findOne({
+            phone: lead.phone,
+            timestamp: lead.timestamp
+          });
+          
+          if (!exists) {
+            await collection.insertOne(lead);
+            insertedCount++;
+          }
+        }
+        if (insertedCount > 0) {
+          console.log(`[DB-LEADS] Seeded ${insertedCount} new leads from leads.json into MongoDB.`);
+        }
+      }
+    }
+  } catch (error) {
+    console.error('[DB-LEADS] Error seeding leads:', error);
+  }
+}
+
