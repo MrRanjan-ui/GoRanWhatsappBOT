@@ -29,7 +29,7 @@ export async function askGemini(
   systemInstruction?: string
 ): Promise<string> {
   if (!apiKey || apiKey === 'YOUR_GEMINI_API_KEY_HERE') {
-    return "⚠️ *GoRan AI System Note*: Gemini API Key is not configured in the bot server. Please tell the administrator to check the .env file.";
+    return "⚠️ *G oRan AI System Note*: Gemini API Key is not configured in the bot server. Please tell the administrator to check the .env file.";
   }
 
   try {
@@ -37,7 +37,7 @@ export async function askGemini(
       "\n\nCRITICAL DIRECTIVE ON APPOINTMENTS: If the user asks to book an appointment, schedule a call, request a meeting, start a project, get a quote, or book a scoping call, you MUST reply with the exact text: `[TRIGGER_BOOKING]` and nothing else. Do not output the booking link. Let the system handle the booking flow directly in the chat.";
 
     const model = genAI.getGenerativeModel({
-      model: 'gemini-flash-latest',
+      model: 'gemini-2.5-flash-lite',
       systemInstruction: instruction
     });
 
@@ -65,7 +65,7 @@ export async function askGeminiRaw(prompt: string): Promise<string> {
 
   try {
     const model = genAI.getGenerativeModel({
-      model: 'gemini-flash-latest'
+      model: 'gemini-2.5-flash-lite'
     });
 
     const result = await model.generateContent(prompt);

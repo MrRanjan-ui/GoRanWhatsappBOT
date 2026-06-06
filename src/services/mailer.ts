@@ -1,25 +1,15 @@
-import * as nodemailer from 'nodemailer';
+import { Resend } from 'resend';
 import * as dotenv from 'dotenv';
 
 // Ensure env variables are configured
 dotenv.config();
 
-const smtpHost = process.env.SMTP_HOST || '';
-const smtpPort = Number(process.env.SMTP_PORT) || 465;
-const smtpUser = process.env.SMTP_USER || '';
-const smtpPass = process.env.SMTP_PASS || '';
+const resendApiKey = process.env.RESEND_API_KEY || '';
+const senderEmail = process.env.SENDER_EMAIL || 'Ashish Ranjan <ashish@goran.in>';
 const notificationEmail = process.env.NOTIFICATION_EMAIL || 'goran.dotin@gmail.com';
 
-// Initialize SMTP transporter
-const transporter = nodemailer.createTransport({
-  host: smtpHost,
-  port: smtpPort,
-  secure: smtpPort === 465, // true for 465, false for 587 (TLS/STARTTLS)
-  auth: {
-    user: smtpUser,
-    pass: smtpPass
-  }
-});
+// Initialize Resend client
+const resend = resendApiKey ? new Resend(resendApiKey) : null;
 
 export interface SendLeadEmailParams {
   phone: string;
@@ -38,18 +28,18 @@ export interface SendLeadEmailParams {
 }
 
 /**
- * Sends HTML emails to the agency (lead alert) and prospect (recap summary).
+ * Sends HTML emails to the agency (lead alert) and prospect (recap summary) using Resend.
  */
 export async function sendLeadEmails(params: SendLeadEmailParams) {
-  // Skip if SMTP credentials are the placeholder defaults
-  if (!smtpHost || !smtpUser || !smtpPass || smtpPass.includes('YOUR_') || smtpUser.includes('your-')) {
-    console.warn('[MAIL-SERVICE] SMTP mailer settings are not configured. Skipping email notifications.');
+  // Skip if Resend API key is not configured
+  if (!resend) {
+    console.warn('[MAIL-SERVICE] Resend API key is not configured. Skipping email notifications.');
     return;
   }
 
   // 1. Email to Agency Inbox (Lead alert)
   const agencyMailOptions = {
-    from: `"GoRan AI Lead Bot" <${smtpUser}>`,
+    from: senderEmail,
     to: notificationEmail,
     subject: `🔥 New Qualified Lead: ${params.bizType} (${params.score})`,
     text: `New Qualified Lead Details:\n\n` +
@@ -119,7 +109,7 @@ export async function sendLeadEmails(params: SendLeadEmailParams) {
 
   // 2. Email to Prospect (Client follow-up recap)
   const clientMailOptions: any = {
-    from: `"Ashish Ranjan | GoRan AI" <${smtpUser}>`,
+    from: senderEmail,
     to: params.email,
     subject: params.meetingTime
       ? `Confirmed: GoRan AI Strategy Call - ${params.meetingTime}`
@@ -233,7 +223,7 @@ export async function sendLeadEmails(params: SendLeadEmailParams) {
         `DTEND:${dtEnd}`,
         `SUMMARY:${summary}`,
         `DESCRIPTION:${description}`,
-        `ORGANIZER;CN="Ashish Ranjan":mailto:${smtpUser}`,
+        `ORGANIZER;CN="Ashish Ranjan":mailto:${senderEmail}`,
         `ATTENDEE;CUTYPE=INDIVIDUAL;ROLE=REQ-PARTICIPANT;PARTSTAT=NEEDS-ACTION;RSVP=TRUE;CN="${params.email}":mailto:${params.email}`,
         'STATUS:CONFIRMED',
         'SEQUENCE:0',
@@ -241,11 +231,12 @@ export async function sendLeadEmails(params: SendLeadEmailParams) {
         'END:VCALENDAR'
       ].join('\r\n');
 
-      clientMailOptions.icalEvent = {
-        filename: 'invite.ics',
-        method: 'request',
-        content: icsContent
-      };
+      clientMailOptions.attachments = [
+        {
+          filename: 'invite.ics',
+          content: Buffer.from(icsContent)
+        }
+      ];
       console.log(`[MAIL-SERVICE] Generated .ics meeting invitation: UID=${uid}`);
     } catch (icsErr: any) {
       console.error('[MAIL-SERVICE] Failed to generate .ics string:', icsErr.message || icsErr);
@@ -254,13 +245,21 @@ export async function sendLeadEmails(params: SendLeadEmailParams) {
 
   try {
     // Send agency notification
-    const agencyInfo = await transporter.sendMail(agencyMailOptions);
-    console.log(`[MAIL-SERVICE] Lead alert email dispatched to agency inbox: ${agencyInfo.messageId}`);
+    const agencyResult = await resend.emails.send(agencyMailOptions);
+    if (agencyResult.error) {
+      console.error('[MAIL-SERVICE] Lead alert email dispatch failed:', agencyResult.error);
+    } else {
+      console.log(`[MAIL-SERVICE] Lead alert email dispatched to agency inbox: ${agencyResult.data?.id}`);
+    }
     
     // Send client recap
     if (params.email && params.email.includes('@')) {
-      const clientInfo = await transporter.sendMail(clientMailOptions);
-      console.log(`[MAIL-SERVICE] Opportunity recap email dispatched to prospect: ${clientInfo.messageId}`);
+      const clientResult = await resend.emails.send(clientMailOptions);
+      if (clientResult.error) {
+        console.error('[MAIL-SERVICE] Opportunity recap email dispatch failed:', clientResult.error);
+      } else {
+        console.log(`[MAIL-SERVICE] Opportunity recap email dispatched to prospect: ${clientResult.data?.id}`);
+      }
     }
   } catch (error: any) {
     console.error('[MAIL-SERVICE] Email dispatch failed:', error.message || error);
