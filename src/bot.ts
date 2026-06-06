@@ -1,4 +1,4 @@
-import { sendWhatsAppReply } from './services/whatsapp';
+import { sendWhatsAppReply, sendWhatsAppTyping } from './services/whatsapp';
 import * as fs from 'fs';
 import * as path from 'path';
 import * as dotenv from 'dotenv';
@@ -197,6 +197,11 @@ export async function handleIncomingMessage(senderNumber: string, messageText: s
 
     // Refresh the 15-minute inactivity timer
     refreshSessionTimeout(remoteJid);
+
+    // Trigger typing indicator asynchronously (do not await, let it run in background)
+    sendWhatsAppTyping(remoteJid).catch(err => {
+      console.warn('[WHATSAPP-SERVICE] Error sending typing indicator:', err.message || err);
+    });
 
     // Handle based on phase
     switch (session.phase) {

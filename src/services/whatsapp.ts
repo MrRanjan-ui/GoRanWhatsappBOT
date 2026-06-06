@@ -136,3 +136,45 @@ export async function sendWhatsAppReply(to: string, text: string): Promise<any> 
 
   return sendWhatsAppMessage(to, text);
 }
+
+/**
+ * Sends a typing indicator to a WhatsApp number.
+ */
+export async function sendWhatsAppTyping(to: string): Promise<any> {
+  if (!WHATSAPP_TOKEN || WHATSAPP_TOKEN.includes('your-meta-') || !WHATSAPP_PHONE_NUMBER_ID || WHATSAPP_PHONE_NUMBER_ID.includes('your-')) {
+    return null;
+  }
+
+  const formattedTo = to.replace(/\D/g, '');
+  const url = `https://graph.facebook.com/v20.0/${WHATSAPP_PHONE_NUMBER_ID}/messages`;
+
+  const payload = {
+    messaging_product: 'whatsapp',
+    recipient_type: 'individual',
+    to: formattedTo,
+    type: 'typing_indicator',
+    typing_indicator: {
+      action: 'typing_on'
+    }
+  };
+
+  try {
+    const response = await fetch(url, {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${WHATSAPP_TOKEN}`,
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify(payload)
+    });
+
+    const data = await response.json() as any;
+    if (!response.ok) {
+      console.warn('[WHATSAPP-SERVICE] Failed to send typing indicator:', JSON.stringify(data));
+    }
+    return data;
+  } catch (error: any) {
+    console.error(`[WHATSAPP-SERVICE] Failed to send typing indicator:`, error.message || error);
+    return null;
+  }
+}
